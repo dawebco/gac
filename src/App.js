@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { User, Calendar, Lock, Star, Gift, MapPin, AlertCircle, CheckCircle2 } from 'lucide-react';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
+import CountryCodeSelector from './CountryCodeSelector';
 import heroBg from './assets/image.png';
 import logoImg from './assets/logo-3.png';
 
@@ -10,13 +11,13 @@ function App() {
 
   // Registration Form State
   const [regFullName, setRegFullName] = useState('');
-  const [regPhone, setRegPhone] = useState('91');          // stores full number incl. dial code
+  const [regPhone, setRegPhone] = useState('');          // stores full number incl. dial code
   const [regCountryData, setRegCountryData] = useState({}); // metadata from library
   const [regDob, setRegDob] = useState('');
   const dateInputRef = useRef(null);
 
   // Login Form State
-  const [loginPhone, setLoginPhone] = useState('91');
+  const [loginPhone, setLoginPhone] = useState('');
   const [loginCountryData, setLoginCountryData] = useState({});
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState(['', '', '', '']);
@@ -40,14 +41,18 @@ function App() {
   // Validation helpers
   // ──────────────────────────────────────────────
   const validatePhone = (fullPhone, dialCode, countryMeta) => {
-    if (!fullPhone || fullPhone.trim() === dialCode) {
+    const code = dialCode || '91';
+    if (!fullPhone || fullPhone.trim() === code) {
       return 'Mobile number is required.';
     }
-    // Strip dial code to get subscriber number
-    const subscriber = fullPhone.replace(dialCode, '').replace(/\D/g, '');
+    // Strip dial code to get subscriber number (value may or may not include it)
+    let subscriber = fullPhone.replace(/\D/g, '');
+    if (subscriber.startsWith(code)) {
+      subscriber = subscriber.slice(code.length);
+    }
 
     // India-specific rules
-    if (dialCode === '91') {
+    if (code === '91') {
       if (
         subscriber.length !== 10 ||
         !/^[6-9]/.test(subscriber) ||
@@ -126,7 +131,7 @@ function App() {
     if (mErr) { setLoginMobileError(mErr); showToast(mErr, 'error'); return; }
 
     setOtpSent(true);
-    const display = `+${loginPhone}`;
+    const display = `+${loginCountryData.dialCode || '91'}${loginPhone}`;
     showToast(`OTP sent to ${display}`, 'success');
   };
 
@@ -184,11 +189,11 @@ function App() {
 
         <div className="hero-content-middle">
           <div className="hero-copy">
-            <h1 className="hero-title">
+            <h1 className="hero-title hero-title-playfair">
               Your Points,<br />
               Endless <span className="highlight-yellow">Journeys</span>
             </h1>
-            <p className="hero-description">
+            <p className="hero-description hero-description-playfair">
               Login to access your rewards, track points and unlock exciting travel experiences.
             </p>
           </div>
@@ -232,74 +237,80 @@ function App() {
               <form onSubmit={handleRegisterSubmit} noValidate>
 
                 {/* ── Full Name ── */}
-<div className="form-group">
-  <label className="form-label light" htmlFor="reg-fullname">Full Name</label>
-  <div className="input-wrapper light name-field">
-    <User className="input-icon light" size={18} />
-    <input
-      id="reg-fullname"
-      type="text"
-      className="form-input light name-input"
-      placeholder="Enter your full name"
-      value={regFullName}
-      onChange={(e) => setRegFullName(e.target.value)}
-    />
-  </div>
-</div>
-                
+                <div className="form-group">
+                  <label className="form-label light" htmlFor="reg-fullname">Full Name</label>
+                  <div className="input-wrapper name-field">
+                    <User className="input-icon" size={18} />
+                    <input
+                      id="reg-fullname"
+                      type="text"
+                      className="form-input name-input"
+                      placeholder="Enter your full name"
+                      value={regFullName}
+                      onChange={(e) => setRegFullName(e.target.value)}
+                    />
+                  </div>
+                </div>
 
-                {/* ── Mobile Number (react-phone-input-2, Light theme) ── */}
+                {/* ── Mobile Number (react-phone-input-2, Dark theme) ── */}
                 <div className="form-group">
                   <label className="form-label light" htmlFor="reg-phone">Mobile Number</label>
-                  <PhoneInput
-                    country="in"
-                    value={regPhone}
-                    onChange={(phone, data) => {
-                      setRegPhone(phone);
-                      setRegCountryData(data);
-                      setRegMobileError('');
-                    }}
-                    inputProps={{ id: 'reg-phone', name: 'reg-phone', required: true }}
-                    containerClass={`rpi-container light${regMobileError ? ' rpi-error' : ''}`}
-                    inputClass="rpi-input"
-                    buttonClass="rpi-btn"
-                    dropdownClass="rpi-dropdown light"
-                    enableSearch
-                    searchPlaceholder="Search country..."
-                    preferredCountries={['in', 'us', 'gb', 'ae', 'sg', 'sa', 'qa', 'au']}
-                    placeholder="Enter mobile number"
-                  />
+                  <div className="rpi-prefix-wrapper">
+                    <CountryCodeSelector />
+                    <PhoneInput
+                      country="in"
+                      value={regPhone}
+                      onChange={(phone, data) => {
+                        setRegPhone(phone);
+                        setRegCountryData(data);
+                        setRegMobileError('');
+                      }}
+                      inputProps={{ id: 'reg-phone', name: 'reg-phone', required: true }}
+                      containerClass={`rpi-container dark${regMobileError ? ' rpi-error' : ''}`}
+                      inputClass="rpi-input"
+                      buttonClass="rpi-btn"
+                      onlyCountries={['in']}
+                      disableDropdown
+                      disableCountryGuess
+                      disableCountryCode
+                      placeholder="Enter mobile number"
+                    />
+                  </div>
                   {regMobileError && (
                     <div className="field-error-text light">{regMobileError}</div>
                   )}
                 </div>
 
-{/* ── Date of Birth ── */}
-<div className="form-group">
-  <label className="form-label light" htmlFor="reg-dob">Date of Birth</label>
-  
-  <div
-    className={`input-wrapper light date-field ${regDobError ? 'input-error' : ''}`}
-    onClick={handleCalendarClick}
-  >
-    <Calendar className="input-icon light date-icon" size={18} />
-    <span className="input-divider date-divider"></span>
-    <input
-      ref={dateInputRef}
-      id="reg-dob"
-      type="date"
-      className={`form-input light date-input ${regDobError ? 'has-error' : ''}`}
-      value={regDob}
-      onChange={(e) => { setRegDob(e.target.value); setRegDobError(''); }}
-    />
-  </div>
-  
-  {regDobError && (
-    <div className="field-error-text light" style={{ color: 'red', fontSize: '12px', marginTop: '4px' }}>
-      {regDobError}
-    </div>
-  )}
-</div>
+                {/* ── Date of Birth ── */}
+                <div className="form-group">
+                  <label className="form-label light" htmlFor="reg-dob">Date of Birth</label>
+
+                  <div className={`input-wrapper date-field ${regDobError ? 'input-error' : ''}`}>
+                    <button
+                      type="button"
+                      className="date-picker-btn"
+                      onClick={handleCalendarClick}
+                      aria-label="Open date picker"
+                    >
+                      <Calendar className="input-icon date-icon" size={18} />
+                    </button>
+                    <span className="input-divider date-divider"></span>
+                    <input
+                      ref={dateInputRef}
+                      id="reg-dob"
+                      type="date"
+                      className={`form-input date-input ${regDobError ? 'has-error' : ''}`}
+                      value={regDob}
+                      onChange={(e) => { setRegDob(e.target.value); setRegDobError(''); }}
+                    />
+                  </div>
+
+                  {regDobError && (
+                    <div className="field-error-text light" style={{ color: 'red', fontSize: '12px', marginTop: '4px' }}>
+                      {regDobError}
+                    </div>
+                  )}
+                </div>
 
                 {/* ── Register CTA ── */}
                 <button type="submit" className="btn-primary" style={{ marginTop: '1.25rem' }}>
@@ -347,24 +358,27 @@ function App() {
                   {/* ── Mobile Number (react-phone-input-2, Dark theme) ── */}
                   <div className="form-group">
                     <label className="form-label" htmlFor="login-phone">Mobile Number</label>
-                    <PhoneInput
-                      country="in"
-                      value={loginPhone}
-                      onChange={(phone, data) => {
-                        setLoginPhone(phone);
-                        setLoginCountryData(data);
-                        setLoginMobileError('');
-                      }}
-                      inputProps={{ id: 'login-phone', name: 'login-phone', required: true }}
-                      containerClass={`rpi-container dark${loginMobileError ? ' rpi-error' : ''}`}
-                      inputClass="rpi-input"
-                      buttonClass="rpi-btn"
-                      dropdownClass="rpi-dropdown dark"
-                      enableSearch
-                      searchPlaceholder="Search country..."
-                      preferredCountries={['in', 'us', 'gb', 'ae', 'sg', 'sa', 'qa', 'au']}
-                      placeholder="Enter mobile number"
-                    />
+                    <div className="rpi-prefix-wrapper">
+                      <CountryCodeSelector />
+                      <PhoneInput
+                        country="in"
+                        value={loginPhone}
+                        onChange={(phone, data) => {
+                          setLoginPhone(phone);
+                          setLoginCountryData(data);
+                          setLoginMobileError('');
+                        }}
+                        inputProps={{ id: 'login-phone', name: 'login-phone', required: true }}
+                        containerClass={`rpi-container dark${loginMobileError ? ' rpi-error' : ''}`}
+                        inputClass="rpi-input"
+                        buttonClass="rpi-btn"
+                        onlyCountries={['in']}
+                        disableDropdown
+                        disableCountryGuess
+                        disableCountryCode
+                        placeholder="Enter mobile number"
+                      />
+                    </div>
                     {loginMobileError && (
                       <div className="field-error-text">{loginMobileError}</div>
                     )}
@@ -392,7 +406,7 @@ function App() {
                 /* OTP Verification */
                 <form onSubmit={handleVerifyOTP}>
                   <div className="otp-sent-banner">
-                    OTP sent to +{loginPhone}
+                    OTP sent to +{loginCountryData.dialCode || '91'}{loginPhone}
                   </div>
                   <div className="form-group">
                     <label className="form-label">Enter 4-Digit OTP</label>
