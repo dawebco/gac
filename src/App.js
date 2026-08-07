@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
   AlertCircle, Briefcase, Calendar, CheckCircle2, CircleDollarSign,
-  Clock3, Gift, History, LayoutDashboard, Lock, LogOut, Mail, MapPin,
+  Gift, History, LayoutDashboard, Lock, LogOut, Mail, MapPin,
   Phone, Star, User, UserRound
 } from 'lucide-react';
 import heroBg from './assets/image.png';
@@ -11,6 +11,19 @@ import rewardTwo from './assets/dashboard/assets/002-2_138.png';
 import rewardThree from './assets/dashboard/assets/003-2_147.png';
 import promoBg from './assets/dashboard/assets/004-2_31.png';
 import avatar from './assets/dashboard/assets/005-2_45.png';
+import milestone1 from './assets/dashboard/assets/1.webp';
+import milestone2 from './assets/dashboard/assets/2.jpg';
+import milestone3 from './assets/dashboard/assets/3.webp';
+import milestone4 from './assets/dashboard/assets/4.jpg';
+import milestone5 from './assets/dashboard/assets/5.webp';
+import milestone6 from './assets/dashboard/assets/6.jpg';
+import milestone7 from './assets/dashboard/assets/7.jpg';
+import milestone8 from './assets/dashboard/assets/8.png';
+import milestone9 from './assets/dashboard/assets/9.jpg';
+import milestone10 from './assets/dashboard/assets/10.webp';
+import milestone11 from './assets/dashboard/assets/11.webp';
+import milestone12 from './assets/dashboard/assets/12.webp';
+import milestone13 from './assets/dashboard/assets/13.webp';
 
 const purchases = [
   ['12 Jan 2026', 'Goa Family Holiday Package', '₹45,000', '450'],
@@ -46,6 +59,8 @@ const milestones = [
   ['20,000,000', '5 Gram Gold Coin', 'A complimentary 5 gram gold coin.'],
 ];
 
+const milestoneImages = [milestone1, milestone2, milestone3, milestone4, milestone5, milestone6, milestone7, milestone8, milestone9, milestone10, milestone11, milestone12, milestone13];
+
 function Dashboard({ customer, onLogout }) {
   const [view, setView] = useState('dashboard');
   const nav = [
@@ -67,7 +82,6 @@ function Dashboard({ customer, onLogout }) {
         <Stat icon={Briefcase} label="TOTAL BOOKINGS" value="6" detail="View all bookings →" link/>
         <Stat icon={CircleDollarSign} label="POINTS EARNED" value="1,250" detail="All time"/>
         <Stat icon={Gift} label="POINTS REDEEMED" value="600" detail="All time"/>
-        <Stat icon={Clock3} label="POINTS EXPIRING" value="120" detail="On 31 Dec 2026"/>
       </section>
       <section className="dashboard-panels">
         <PurchaseHistory onViewAll={() => setView('history')}/>
@@ -92,7 +106,7 @@ function RewardsContent({ includeEarning = false }) {
         <div className="rewards-heading"><div><span>GAC JOURNEY REWARDS</span><h2>Book. Earn. Experience.</h2><p>Every eligible booking takes you closer to your next reward.</p></div><Gift size={32}/></div>
         <div className="earning-section"><div className="section-heading"><small>HOW IT WORKS</small><h2>Points Earning</h2></div><div className="earning-rules">{earningRules.map(([name, spend, points]) => <article key={name}><i><CircleDollarSign size={22}/></i><div><h3>{name}</h3><p><b>{spend}</b> spent earns <strong>{points}</strong></p></div></article>)}</div></div>
         </>}
-        <div className="milestones-section"><div className="section-heading"><small>REDEEM YOUR POINTS</small><h2>Reward Milestones</h2><p>Unlock more memorable rewards as your points balance grows.</p></div><div className="milestone-grid">{milestones.map(([points, title, description], index) => <article className="milestone-card" key={points}><div className="reward-placeholder" aria-label="Reward image placeholder"><Gift size={25}/><span>Image coming soon</span></div><div className="milestone-copy"><span className="milestone-number">{points} PTS</span><h3>{title}</h3><p>{description}</p></div><b className="milestone-index">{String(index + 1).padStart(2, '0')}</b></article>)}</div></div>
+        <div className="milestones-section"><div className="section-heading"><small>REDEEM YOUR POINTS</small><h2>Reward Milestones</h2><p>Unlock more memorable rewards as your points balance grows.</p></div><div className="milestone-grid">{milestones.map(([points, title, description], index) => <article className="milestone-card" key={points}><div className="reward-placeholder"><img src={milestoneImages[index]} alt={title}/></div><div className="milestone-copy"><span className="milestone-number">{points} PTS</span><h3>{title}</h3><p>{description}</p></div><b className="milestone-index">{String(index + 1).padStart(2, '0')}</b></article>)}</div></div>
         <div className="rewards-terms"><AlertCircle size={18}/><p><b>Reward terms:</b> Rewards are subject to availability and applicable terms. Flight benefits, hotel stays and travel experiences depend on partner availability. The brand, model, specifications and colour of merchandise will be decided by GAC Holidays at the time of redemption.</p></div>
       </section>;
 }
