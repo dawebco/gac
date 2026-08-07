@@ -2,9 +2,274 @@ import React, { useState, useRef } from 'react';
 import { User, Calendar, Lock, Star, Gift, MapPin, AlertCircle, CheckCircle2 } from 'lucide-react';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
-import CountryCodeSelector from './CountryCodeSelector';
 import heroBg from './assets/image.png';
 import logoImg from './assets/logo-3.png';
+
+
+// Landing Page Component
+function LandingPage() {
+  return (
+    <div className="gac-holidays">
+      <div className="sidebar">
+        <div className="logo-group">
+          <div className="logo-main">
+            <div className="text-wrapper">GAC</div>
+            <div className="div">Holidays</div>
+          </div>
+          <div className="text-wrapper-2">POINTS SYSTEM</div>
+        </div>
+        <div className="nav-list">
+          <div className="nav-item-dashboard">
+            <div className="vector-wrapper">
+              <img className="vector" src="img/vector-7.svg" alt="" />
+            </div>
+            <div className="text-wrapper-3">Dashboard</div>
+          </div>
+          <div className="div-2">
+            <div className="vector-wrapper">
+              <img className="vector" src="img/vector-17.svg" alt="" />
+            </div>
+            <div className="text-wrapper-4">Purchase History</div>
+          </div>
+          <div className="div-2">
+            <div className="vector-wrapper">
+              <img className="img" src="img/vector-5.svg" alt="" />
+            </div>
+            <div className="text-wrapper-4">Rewards</div>
+          </div>
+          <div className="div-2">
+            <div className="vector-wrapper">
+              <img className="vector-2" src="img/vector-4.svg" alt="" />
+            </div>
+            <div className="text-wrapper-4">Earn Points</div>
+          </div>
+          <div className="div-2">
+            <div className="vector-wrapper">
+              <img className="vector-3" src="img/vector-12.svg" alt="" />
+            </div>
+            <div className="text-wrapper-4">Profile</div>
+          </div>
+          <div className="div-2">
+            <div className="vector-wrapper">
+              <img className="vector" src="img/vector-8.svg" alt="" />
+            </div>
+            <div className="text-wrapper-4">Logout</div>
+          </div>
+        </div>
+        <div className="spacer" />
+        <div className="sidebar-promo">
+          <div className="promo-content">
+            <div className="explore-more-earn">Explore More.<br/>Earn More.</div>
+            <p className="p">More journeys, more memories, more points.</p>
+          </div>
+          <div className="promo-button-row">
+            <div className="circular-arrow">
+              <div className="img-wrapper">
+                <img className="vector-4" src="img/vector-9.svg" alt="" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="main-content">
+        <div className="div-3">
+          <div className="welcome-text-group">
+            <div className="text-wrapper-5">Welcome Back, Numa!</div>
+            <p className="text-wrapper-6">Track your points, explore rewards and continue your journey with GAC Holidays.</p>
+          </div>
+          <div className="div-4">
+            <div className="text-wrapper-7">Hello, Numa</div>
+            <img className="user-avatar" src="img/user-avatar.png" alt="User Avatar" />
+          </div>
+        </div>
+        <div className="points-summary-row">
+          <div className="featured-points-card">
+            <div className="div-3">
+              <div className="total-points">TOTAL POINTS</div>
+              <div className="vector-wrapper">
+                <img className="vector-2" src="img/vector-2.svg" alt="" />
+              </div>
+            </div>
+            <div className="big-pts">
+              <div className="text-wrapper-8">650</div>
+              <div className="text-wrapper-9">PTS</div>
+            </div>
+            <div className="featured-sub-details">
+              <div className="frame">
+                <div className="text-wrapper-10">Available Points</div>
+                <div className="text-wrapper-11">650 PTS</div>
+              </div>
+              <div className="frame">
+                <div className="text-wrapper-10">Total Earned</div>
+                <div className="text-wrapper-11">1,250 PTS</div>
+              </div>
+              <div className="frame">
+                <div className="text-wrapper-10">Total Redeemed</div>
+                <div className="text-wrapper-11">600 PTS</div>
+              </div>
+            </div>
+          </div>
+          <div className="small-cards-grid">
+            <div className="div-5">
+              <div className="div-3">
+                <div className="text-wrapper-12">TOTAL BOOKINGS</div>
+                <div className="icon-container">
+                  <div className="vector-wrapper-2">
+                    <img className="vector-5" src="img/vector-13.svg" alt="" />
+                  </div>
+                </div>
+              </div>
+              <div className="text-wrapper-13">6</div>
+              <div className="view-all-link">
+                <div className="text-wrapper-14">View all bookings</div>
+                <div className="arrow-right">
+                  <img className="vector-6" src="img/vector-3.svg" alt="" />
+                </div>
+              </div>
+            </div>
+            <div className="div-5">
+              <div className="div-3">
+                <div className="text-wrapper-12">POINTS EARNED</div>
+                <div className="icon-container">
+                  <div className="vector-wrapper-2">
+                    <img className="vector-7" src="img/vector-10.svg" alt="" />
+                  </div>
+                </div>
+              </div>
+              <div className="text-wrapper-13">1,250</div>
+              <div className="text-wrapper-15">All time</div>
+            </div>
+            <div className="div-5">
+              <div className="div-3">
+                <div className="text-wrapper-12">POINTS REDEEMED</div>
+                <div className="icon-container">
+                  <div className="vector-wrapper-2">
+                    <img className="vector-8" src="img/vector-6.svg" alt="" />
+                  </div>
+                </div>
+              </div>
+              <div className="text-wrapper-13">600</div>
+              <div className="text-wrapper-15">All time</div>
+            </div>
+            <div className="div-5">
+              <div className="div-3">
+                <div className="text-wrapper-12">POINTS EXPIRING</div>
+                <div className="icon-container">
+                  <div className="clock" />
+                </div>
+              </div>
+              <div className="text-wrapper-13">120</div>
+              <div className="text-wrapper-15">On 31 Dec 2026</div>
+            </div>
+          </div>
+        </div>
+        <div className="bottom-split-row">
+          <div className="purchase-history">
+            <div className="div-3">
+              <div className="text-wrapper-16">Recent Purchase History</div>
+              <div className="text-wrapper-17">View All</div>
+            </div>
+            <div className="div-6">
+              <div className="table-head">
+                <div className="date">DATE</div>
+                <div className="description">DESCRIPTION</div>
+                <div className="text-wrapper-18">AMOUNT</div>
+                <div className="text-wrapper-18">PTS EARNED</div>
+              </div>
+              <div className="row">
+                <div className="text-wrapper-19">12 Jan 2026</div>
+                <div className="text-wrapper-20">Goa Family Holiday Package</div>
+                <div className="text-wrapper-21">₹45,000</div>
+                <div className="text-wrapper-22">450</div>
+              </div>
+              <div className="row">
+                <div className="text-wrapper-19">25 Feb 2026</div>
+                <div className="text-wrapper-20">Hampi Group Tour</div>
+                <div className="text-wrapper-21">�₹12,500</div>
+                <div className="text-wrapper-22">125</div>
+              </div>
+              <div className="row">
+                <div className="text-wrapper-19">10 Mar 2026</div>
+                <div className="text-wrapper-20">Kerala Backwaters</div>
+                <div className="text-wrapper-21">�₹32,000</div>
+                <div className="text-wrapper-22">320</div>
+              </div>
+              <div className="row-2">
+                <div className="text-wrapper-23">05 Apr 2026</div>
+                <div className="text-wrapper-24">Rajasthan Heritage Tour</div>
+                <div className="text-wrapper-25">�₹28,000</div>
+                <div className="text-wrapper-26">280</div>
+              </div>
+            </div>
+            <div className="table-footer-note">
+              <div className="info" />
+              <p className="text-wrapper-27">Points are credited after the completion of the trip.</p>
+            </div>
+          </div>
+          <div className="available-rewards">
+            <div className="div-3">
+              <div className="text-wrapper-16">Available Rewards</div>
+              <div className="text-wrapper-17">View All</div>
+            </div>
+            <div className="div-6">
+              <div className="reward-row-item">
+                <img className="reward-thumb" src="img/reward-thumb-2.png" alt="Reward Thumb" />
+                <div className="reward-details">
+                  <div className="text-wrapper-28">Beach Resort Voucher</div>
+                  <p className="text-wrapper-29">�₹500 off on select beach resorts</p>
+                </div>
+                <div className="div-4">
+                  <div className="points-button">
+                    <div className="text-wrapper-30">500 PTS</div>
+                  </div>
+                </div>
+                <div className="img-wrapper">
+                  <img className="vector-9" src="img/vector-11.svg" alt="" />
+                </div>
+              </div>
+              <div className="reward-row-item">
+                <img className="reward-thumb" src="img/image.png" alt="Reward Thumb" />
+                <div className="reward-details">
+                  <div className="text-wrapper-28">Free Travel Accessories Kit</div>
+                  <p className="text-wrapper-29">Premium luggage and travel accessories</p>
+                </div>
+                <div className="div-4">
+                  <div className="points-button">
+                    <div className="text-wrapper-30">750 PTS</div>
+                  </div>
+                </div>
+                <div className="img-wrapper">
+                  <img className="vector-9" src="img/image.svg" alt="" />
+                </div>
+              </div>
+              <div className="reward-row-item-2">
+                <img className="reward-thumb" src="img/reward-thumb.png" alt="Reward Thumb" />
+                <div className="reward-details">
+                  <p className="text-wrapper-28">�₹1000 off on International Packages</p>
+                  <div className="text-wrapper-29">Exciting adventure sports experience</div>
+                </div>
+                <div className="div-4">
+                  <div className="points-button">
+                    <div className="text-wrapper-30">1000 PTS</div>
+                  </div>
+                </div>
+                <div className="img-wrapper">
+                  <img className="vector-9" src="img/vector-14.svg" alt="" />
+                </div>
+              </div>
+            </div>
+            <div className="rewards-footer">
+              <div className="img-wrapper">
+                <img className="vector-10" src="img/vector.svg" alt="" />
+              </div>
+              <p className="text-wrapper-31">More rewards. More journeys. More memories.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const [formMode, setFormMode] = useState('register');
@@ -30,6 +295,9 @@ function App() {
   // Toast State
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success');
+
+  // Landing page state
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const showToast = (msg, type = 'success') => {
     setToastMessage(msg);
@@ -142,6 +410,8 @@ function App() {
       return;
     }
     showToast('OTP verified! Welcome back.', 'success');
+    // Set logged in state to show landing page
+    setIsLoggedIn(true);
   };
 
   const handleOtpChange = (index, value) => {
@@ -255,8 +525,9 @@ function App() {
                 {/* ── Mobile Number (react-phone-input-2, Dark theme) ── */}
                 <div className="form-group">
                   <label className="form-label light" htmlFor="reg-phone">Mobile Number</label>
-                  <div className="rpi-prefix-wrapper">
-                    <CountryCodeSelector />
+<div className="rpi-prefix-wrapper">
+                    <span className="rpi-static-prefix">+91</span>
+                    <span className="rpi-prefix-divider"></span>
                     <PhoneInput
                       country="in"
                       value={regPhone}
@@ -358,8 +629,9 @@ function App() {
                   {/* ── Mobile Number (react-phone-input-2, Dark theme) ── */}
                   <div className="form-group">
                     <label className="form-label" htmlFor="login-phone">Mobile Number</label>
-                    <div className="rpi-prefix-wrapper">
-                      <CountryCodeSelector />
+<div className="rpi-prefix-wrapper">
+                      <span className="rpi-static-prefix">+91</span>
+                      <span className="rpi-prefix-divider"></span>
                       <PhoneInput
                         country="in"
                         value={loginPhone}

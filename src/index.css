@@ -1193,17 +1193,33 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   width: 100% !important;
 }
 
-/* Static flag + dial code prefix, positioned inside the input */
-.rpi-prefix-wrapper .country-selector-root.no-dropdown {
+/* Static dial-code prefix, positioned inside the input */
+.rpi-prefix-wrapper .rpi-static-prefix {
   position: absolute !important;
-  left: 10px !important;
+  left: 12px !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
   z-index: 4 !important;
   pointer-events: none !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 4px !important;
+  color: var(--text-white) !important;
+  font-weight: 700 !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+  font-family: var(--font-family) !important;
+  white-space: nowrap !important;
+}
+
+/* Vertical divider line immediately after +91 (with a small gap) */
+.rpi-prefix-wrapper .rpi-prefix-divider {
+  position: absolute !important;
+  left: 52px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 1px !important;
+  height: 22px !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  z-index: 4 !important;
+  pointer-events: none !important;
 }
 
 .rpi-container {
@@ -1218,10 +1234,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   width: 100% !important;
   height: 48px !important;
   border-radius: 12px !important;
-  font-family: var(--font-family) !important;
-  font-size: clamp(0.85rem, 1vw, 0.95rem) !important;
-  /* leave room for the static flag + dial code prefix */
-  padding-left: 92px !important;
+font-family: var(--font-family) !important;
+font-size: clamp(0.85rem, 1vw, 0.95rem) !important;
+  /* leave room for the +91 prefix and divider, then a small gap */
+  padding-left: 64px !important;
   outline: none !important;
   transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
   background: transparent !important;
