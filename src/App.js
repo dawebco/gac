@@ -4,7 +4,6 @@ import {
   Gift, History, LayoutDashboard, Lock, LogOut, Mail, MapPin,
   Phone, Star, User, UserRound
 } from 'lucide-react';
-import heroBg from './assets/image.png';
 import logoImg from './assets/logo-3.png';
 import rewardOne from './assets/dashboard/assets/001-2_129.png';
 import rewardTwo from './assets/dashboard/assets/002-2_138.png';
@@ -24,6 +23,8 @@ import milestone10 from './assets/dashboard/assets/10.webp';
 import milestone11 from './assets/dashboard/assets/11.webp';
 import milestone12 from './assets/dashboard/assets/12.webp';
 import milestone13 from './assets/dashboard/assets/13.webp';
+
+const heroBg = `${process.env.PUBLIC_URL}/imageeeee.png`;
 
 const purchases = [
   ['12 Jan 2026', 'Goa Family Holiday Package', '₹45,000', '450'],
