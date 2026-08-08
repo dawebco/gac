@@ -1,15 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle, Briefcase, Calendar, CheckCircle2, CircleDollarSign,
-  Gift, History, LayoutDashboard, Lock, LogOut, Mail, MapPin,
-  Phone, Star, User, UserRound
+  Gift, History, LayoutDashboard, Lock, LogOut, Mail, MapPin, Menu,
+  Phone, Star, User, UserRound, WalletCards, X
 } from 'lucide-react';
 import logoImg from './assets/logo-3.png';
-import rewardOne from './assets/dashboard/assets/001-2_129.png';
-import rewardTwo from './assets/dashboard/assets/002-2_138.png';
-import rewardThree from './assets/dashboard/assets/003-2_147.png';
-import promoBg from './assets/dashboard/assets/004-2_31.png';
-import avatar from './assets/dashboard/assets/005-2_45.png';
 import milestone1 from './assets/dashboard/assets/1.webp';
 import milestone2 from './assets/dashboard/assets/2.jpg';
 import milestone3 from './assets/dashboard/assets/3.webp';
@@ -34,9 +29,9 @@ const purchases = [
 ];
 
 const rewards = [
-  [rewardOne, 'Beach Resort Voucher', '₹500 off on select beach resorts', '500 PTS'],
-  [rewardTwo, 'Free Travel Accessories Kit', 'Premium luggage and travel accessories', '750 PTS'],
-  [rewardThree, '₹1000 off on International Packages', 'Exciting adventure sports experience', '1000 PTS'],
+  [milestone7, 'Beach Resort Voucher', '₹500 off on select beach resorts', '500 PTS'],
+  [milestone1, 'Free Travel Accessories Kit', 'Premium luggage and travel accessories', '750 PTS'],
+  [milestone3, '₹1000 off on International Packages', 'Exciting adventure sports experience', '1000 PTS'],
 ];
 
 const earningRules = [
@@ -64,31 +59,45 @@ const milestoneImages = [milestone1, milestone2, milestone3, milestone4, milesto
 
 function Dashboard({ customer, onLogout }) {
   const [view, setView] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const nav = [
-    [LayoutDashboard, 'Dashboard', 'dashboard'], [History, 'Purchase History', 'history'],
-    [Gift, 'Rewards', 'rewards'], [UserRound, 'Profile', 'profile'], [LogOut, 'Logout', 'logout'],
+    [LayoutDashboard, 'Dashboard', 'dashboard'], [Gift, 'Rewards', 'rewards'],
+    [History, 'Purchase History', 'history'], [UserRound, 'Profile', 'profile'],
   ];
   const firstName = customer.name.trim().split(/\s+/)[0] || 'Customer';
+  const viewTitles = {
+    history: ['Purchase History', 'Review points earned across your completed GAC Holidays journeys.'],
+    rewards: ['Reward Milestones', 'Unlock more memorable rewards as your points balance grows.'],
+    profile: ['My Profile', 'Manage your GAC Journey Rewards customer account.'],
+  };
   return <div className="dashboard-shell">
-    <aside className="dashboard-sidebar">
+    <div className="mobile-topbar">
+      <img className="mobile-brand-logo" src={logoImg} alt="GAC Holidays"/>
+      <div>
+        <button className="mobile-profile-button" onClick={() => setView('profile')} aria-label="Open profile"><User size={17}/></button>
+        <button className="mobile-menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open navigation" aria-expanded={sidebarOpen}><Menu size={22}/></button>
+      </div>
+    </div>
+    <button className={`dashboard-backdrop ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} aria-label="Close navigation" tabIndex={sidebarOpen ? 0 : -1}/>
+    <aside className={`dashboard-sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <button className="mobile-menu-close" onClick={() => setSidebarOpen(false)} aria-label="Close navigation"><X size={21}/></button>
       <div className="dashboard-logo"><b>GAC</b><span>Holidays</span><small>POINTS SYSTEM</small></div>
-      <nav>{nav.map(([Icon, label, target]) => <button key={label} className={view === target ? 'active' : ''} onClick={target === 'logout' ? onLogout : () => setView(target)}><Icon size={18}/><span>{label}</span></button>)}</nav>
-      <div className="dashboard-promo" style={{backgroundImage: `url(${promoBg})`}} role="img" aria-label="Explore more. Earn more. More journeys, more memories, more points." />
+      <nav aria-label="Customer account">{nav.map(([Icon, label, target]) => <button key={label} className={view === target ? 'active' : ''} aria-current={view === target ? 'page' : undefined} onClick={() => { setView(target); setSidebarOpen(false); }}><Icon size={17}/><span>{label}</span></button>)}</nav>
+      <button className="dashboard-logout" onClick={onLogout}><LogOut size={17}/><span>Logout</span></button>
     </aside>
     <main className="dashboard-main">
-      <header><div><h1>{view === 'dashboard' ? `Welcome Back, ${firstName}!` : {history:'Purchase History',rewards:'Reward Milestones',profile:'My Profile'}[view]}</h1><p>{view === 'dashboard' ? 'Track your points, explore rewards and continue your journey with GAC Holidays.' : 'GAC Journey Rewards customer account'}</p></div><button className="dashboard-user" onClick={() => setView('profile')}><b>Hello, {firstName}</b><img src={avatar} alt={`${firstName} profile`}/></button></header>
+      <header><div><h1>{view === 'dashboard' ? <>Welcome back, {firstName.toLowerCase()}! <span className="welcome-wave">👋</span></> : viewTitles[view][0]}</h1><p>{view === 'dashboard' ? <>Track your points, explore rewards and continue your journey with <b>GAC Holidays.</b></> : viewTitles[view][1]}</p>{view === 'rewards' && <small className="rewards-action-label">REDEEM YOUR POINTS.</small>}</div>{view !== 'profile' && <button className="dashboard-user" onClick={() => setView('profile')} aria-label="Open profile"><i><User size={14}/></i><b>{firstName.toLowerCase()}</b></button>}</header>
       {view === 'dashboard' && <>
       <section className="summary-grid">
-        <article className="points-card"><div><small>TOTAL POINTS</small><Star size={20}/></div><h2>650 <span>PTS</span></h2><dl><div><dt>Available Points</dt><dd>650 PTS</dd></div><div><dt>Total Earned</dt><dd>1,250 PTS</dd></div><div><dt>Total Redeemed</dt><dd>600 PTS</dd></div></dl></article>
-        <Stat icon={Briefcase} label="TOTAL BOOKINGS" value="6" detail="View all bookings →" link/>
-        <Stat icon={CircleDollarSign} label="POINTS EARNED" value="1,250" detail="All time"/>
+        <article className="points-card"><div><small>TOTAL POINTS</small><i><Star size={17}/></i></div><h2>650 <span>PTS</span></h2><p>Available to redeem</p></article>
+        <Stat icon={Calendar} label="TOTAL BOOKINGS" value="6" detail="All time"/>
+        <Stat icon={WalletCards} label="POINTS EARNED" value="1,250" suffix="PTS" detail="All time"/>
         <Stat icon={Gift} label="POINTS REDEEMED" value="600" detail="All time"/>
       </section>
-      <section className="dashboard-panels">
-        <PurchaseHistory onViewAll={() => setView('history')}/>
-        <article className="panel rewards-panel"><PanelTitle title="Available Rewards"/><div>{rewards.map(([img, title, desc, points]) => <div className="reward-row" key={title}><img src={img} alt=""/><div><b>{title}</b><p>{desc}</p></div><strong>{points}</strong><span>›</span></div>)}</div><div className="rewards-note"><Gift size={14}/> More rewards. More journeys. More memories.</div></article>
+      <section className="dashboard-rewards">
+        <div className="dashboard-rewards-title"><h2>Available Rewards</h2><button onClick={() => setView('rewards')}>View All Rewards <span>→</span></button></div>
+        <div className="reward-card-grid">{rewards.map(reward => <RewardCard key={reward[1]} reward={reward}/>)}</div>
       </section>
-      <RewardsContent includeEarning/>
       </>}
       {view === 'history' && <section className="focused-view"><PurchaseHistory/></section>}
       {view === 'rewards' && <section className="focused-view"><RewardsContent/></section>}
@@ -97,8 +106,8 @@ function Dashboard({ customer, onLogout }) {
   </div>;
 }
 
-function PurchaseHistory({ onViewAll }) {
-  return <article className="panel history-panel"><div className="panel-title"><h2>Recent Purchase History</h2>{onViewAll && <button onClick={onViewAll}>View All</button>}</div><div className="purchase-table"><div className="purchase-head"><span>DATE</span><span>DESCRIPTION</span><span>AMOUNT</span><span>PTS EARNED</span></div>{purchases.map(row => <div className="purchase-row" key={row[0]}>{row.map((cell, i) => <span key={cell} data-label={['Date','Description','Amount','Points'][i]}>{cell}</span>)}</div>)}</div><div className="panel-note"><AlertCircle size={14}/> Points are credited after the completion of the trip.</div></article>;
+function PurchaseHistory() {
+  return <article className="panel history-panel"><div className="purchase-table"><div className="purchase-head"><span>DATE</span><span>DESCRIPTION</span><span>AMOUNT</span><span>PTS EARNED</span></div>{purchases.map(row => <div className="purchase-row" key={row[0]}>{row.map((cell, i) => <span key={cell} data-label={['Date','Description','Amount','Points'][i]}>{cell}</span>)}</div>)}</div><div className="panel-note"><AlertCircle size={14}/> Points are credited after the completion of the trip.</div></article>;
 }
 
 function RewardsContent({ includeEarning = false }) {
@@ -107,17 +116,21 @@ function RewardsContent({ includeEarning = false }) {
         <div className="rewards-heading"><div><span>GAC JOURNEY REWARDS</span><h2>Book. Earn. Experience.</h2><p>Every eligible booking takes you closer to your next reward.</p></div><Gift size={32}/></div>
         <div className="earning-section"><div className="section-heading"><small>HOW IT WORKS</small><h2>Points Earning</h2></div><div className="earning-rules">{earningRules.map(([name, spend, points]) => <article key={name}><i><CircleDollarSign size={22}/></i><div><h3>{name}</h3><p><b>{spend}</b> spent earns <strong>{points}</strong></p></div></article>)}</div></div>
         </>}
-        <div className="milestones-section"><div className="section-heading"><small>REDEEM YOUR POINTS</small><h2>Reward Milestones</h2><p>Unlock more memorable rewards as your points balance grows.</p></div><div className="milestone-grid">{milestones.map(([points, title, description], index) => <article className="milestone-card" key={points}><div className="reward-placeholder"><img src={milestoneImages[index]} alt={title}/></div><div className="milestone-copy"><span className="milestone-number">{points} PTS</span><h3>{title}</h3><p>{description}</p></div><b className="milestone-index">{String(index + 1).padStart(2, '0')}</b></article>)}</div></div>
+        <div className="milestones-section"><div className="milestone-grid">{milestones.map(([points, title, description], index) => <article className="milestone-card" key={points}><div className="reward-placeholder"><img src={milestoneImages[index]} alt={title}/></div><div className="milestone-copy"><span className="milestone-number">{points} PTS</span><h3>{title}</h3><p>{description}</p></div></article>)}</div></div>
         <div className="rewards-terms"><AlertCircle size={18}/><p><b>Reward terms:</b> Rewards are subject to availability and applicable terms. Flight benefits, hotel stays and travel experiences depend on partner availability. The brand, model, specifications and colour of merchandise will be decided by GAC Holidays at the time of redemption.</p></div>
       </section>;
 }
 
-function Profile({ customer }) {
-  return <section className="profile-view"><div className="profile-hero"><img src={avatar} alt="Customer profile"/><div><small>GAC JOURNEY REWARDS MEMBER</small><h2>{customer.name}</h2><p>Manage your customer details and review your booking activity.</p></div></div><div className="profile-grid"><article><i><User size={20}/></i><small>FULL NAME</small><strong>{customer.name}</strong></article><article><i><Mail size={20}/></i><small>EMAIL ADDRESS</small><strong>{customer.email}</strong></article><article><i><Phone size={20}/></i><small>MOBILE NUMBER</small><strong>+91 {customer.phone}</strong></article><article><i><Briefcase size={20}/></i><small>TOTAL BOOKINGS</small><strong>6 bookings</strong></article></div><div className="profile-bookings"><PanelTitle title="Booking Summary"/><div className="profile-booking-stats"><div><b>6</b><span>Total bookings</span></div><div><b>4</b><span>Completed trips</span></div><div><b>2</b><span>Upcoming trips</span></div><div><b>1,250</b><span>Points earned</span></div></div></div></section>;
+function RewardCard({ reward: [image, title, description, points] }) {
+  return <article className="reward-card"><div className="reward-card-image"><img src={image} alt=""/><strong>{points}</strong></div><div className="reward-card-copy"><h3>{title}</h3><p>{description}</p><small><Calendar size={13}/> Valid till 31 Dec 2026</small><button>Redeem Now <span>→</span></button></div></article>;
 }
 
-function Stat({ icon: Icon, label, value, detail, link }) {
-  return <article className="stat-card"><div><small>{label}</small><i><Icon size={17}/></i></div><h3>{value}</h3><p className={link ? 'stat-link' : ''}>{detail}</p></article>;
+function Profile({ customer }) {
+  return <section className="profile-view"><div className="profile-hero"><i className="profile-avatar-icon" aria-hidden="true"><User size={38}/></i><div><small>GAC JOURNEY REWARDS MEMBER</small><h2>{customer.name}</h2><p>Manage your customer details and review your booking activity.</p></div></div><div className="profile-grid"><article><i><User size={20}/></i><small>FULL NAME</small><strong>{customer.name}</strong></article><article><i><Mail size={20}/></i><small>EMAIL ADDRESS</small><strong>{customer.email}</strong></article><article><i><Phone size={20}/></i><small>MOBILE NUMBER</small><strong>+91 {customer.phone}</strong></article><article><i><Briefcase size={20}/></i><small>TOTAL BOOKINGS</small><strong>6 bookings</strong></article></div><div className="profile-bookings"><PanelTitle title="Booking Summary"/><div className="profile-booking-stats"><div><b>6</b><span>Total bookings</span></div><div><b>4</b><span>Completed trips</span></div><div><b>2</b><span>Upcoming trips</span></div><div><b>1,250</b><span>Points earned</span></div></div></div></section>;
+}
+
+function Stat({ icon: Icon, label, value, suffix, detail }) {
+  return <article className="stat-card"><div><small>{label}</small><i><Icon size={16}/></i></div><h3>{value} {suffix && <span>{suffix}</span>}</h3><p>{detail}</p></article>;
 }
 
 function PanelTitle({ title }) { return <div className="panel-title"><h2>{title}</h2><button>View All</button></div>; }
@@ -135,6 +148,12 @@ function App() {
   const otpRefs = useRef([]);
   const dateRef = useRef(null);
   const [customer, setCustomer] = useState({ name: 'Numa', email: 'numa@example.com', phone: '9876543210' });
+
+  useEffect(() => {
+    if (toast !== 'Dummy OTP sent. Enter any 4 digits.') return undefined;
+    const dismissTimer = window.setTimeout(() => setToast(''), 3000);
+    return () => window.clearTimeout(dismissTimer);
+  }, [toast]);
 
   if (mode === 'dashboard') return <Dashboard customer={customer} onLogout={() => { setMode('login'); setOtpSent(false); setOtp(['','','','']); }} />;
 
