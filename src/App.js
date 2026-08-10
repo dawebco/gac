@@ -23,6 +23,11 @@ import milestone13 from './assets/dashboard/assets/13.webp';
 
 const heroBg = `${process.env.PUBLIC_URL}/imageeeee.png`;
 
+const calculateRewardPoints = (bookingType, purchasedAmount) => {
+  const amount = Math.max(0, Number(purchasedAmount) || 0);
+  return bookingType === 'Flights' ? Math.floor(amount / 5) : Math.floor(amount);
+};
+
 const purchases = [
   ['12 Jan 2026', 'Goa Family Holiday Package', '₹45,000', '450'],
   ['25 Feb 2026', 'Hampi Group Tour', '₹12,500', '125'],
@@ -203,9 +208,21 @@ function AdminPortal() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const login = event => {
+  const login = async event => {
     event.preventDefault();
-    if (username === 'admin' && password === 'Admin@123') {
+    const normalizeCredential = value => value.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const enteredUsername = normalizeCredential(username).toLowerCase();
+    const enteredPassword = normalizeCredential(password);
+    const configuredUsername = normalizeCredential(process.env.REACT_APP_ADMIN_USERNAME || '').toLowerCase();
+    const configuredPasswordHash = normalizeCredential(process.env.REACT_APP_ADMIN_PASSWORD_HASH || '').toLowerCase();
+    if (!configuredUsername || !configuredPasswordHash) {
+      setError('Admin login is not configured.');
+      return;
+    }
+    const passwordBytes = new TextEncoder().encode(enteredPassword);
+    const passwordDigest = await window.crypto.subtle.digest('SHA-256', passwordBytes);
+    const enteredPasswordHash = Array.from(new Uint8Array(passwordDigest), byte => byte.toString(16).padStart(2, '0')).join('');
+    if (enteredUsername === configuredUsername && enteredPasswordHash === configuredPasswordHash) {
       setAuthenticated(true);
       setError('');
     } else setError('Incorrect username or password.');
@@ -215,7 +232,7 @@ function AdminPortal() {
     <header className="admin-login-brand"><img src={logoImg} alt="GAC Holidays"/><span>ADMIN PORTAL</span></header>
     <section className="admin-login-card" aria-labelledby="admin-login-title">
       <div className="admin-login-icon"><ShieldCheck size={28}/></div><h1 id="admin-login-title">Admin Login</h1><p>Sign in to manage customers and rewards.</p>
-      <form onSubmit={login}><label htmlFor="admin-username">Username</label><div className="admin-login-field"><User size={18}/><input id="admin-username" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} placeholder="Enter admin username"/></div><label htmlFor="admin-password">Password</label><div className="admin-login-field"><Lock size={18}/><input id="admin-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} placeholder="Enter admin password"/><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}</button></div>{error && <div className="admin-login-error" role="alert"><AlertCircle size={15}/>{error}</div>}<button className="admin-login-submit" type="submit">Login to Dashboard</button></form>
+      <form onSubmit={login}><label htmlFor="admin-username">Username</label><div className="admin-login-field"><User size={18}/><input id="admin-username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={event => { setUsername(event.target.value); setError(''); }} placeholder="Enter admin username"/></div><label htmlFor="admin-password">Password</label><div className="admin-login-field"><Lock size={18}/><input id="admin-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" autoCapitalize="none" spellCheck={false} value={password} onChange={event => { setPassword(event.target.value); setError(''); }} placeholder="Enter admin password"/><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}</button></div>{error && <div className="admin-login-error" role="alert"><AlertCircle size={15}/>{error}</div>}<button className="admin-login-submit" type="submit">Login to Dashboard</button></form>
       <small><Lock size={13}/> Restricted access for authorized administrators.</small>
     </section>
   </main>;
@@ -296,7 +313,7 @@ function AdminCustomerManager({ customer, onChange, onClose }) {
       setFeedback('Enter a purchased amount and booking date.');
       return;
     }
-    const rewardPoints = bookingForm.type === 'Flights' ? Math.floor(amount / 5) : Math.floor(amount / 10);
+    const rewardPoints = calculateRewardPoints(bookingForm.type, amount);
     const booking = {
       id: `GAC-${customer.phone.slice(-4)}-${Date.now().toString().slice(-6)}`,
       type: bookingForm.type,
@@ -362,7 +379,7 @@ function AdminRegisterPanel({ customers, onRegister, onExistingCustomer }) {
   const update = event => setForm(current => ({ ...current, [event.target.name]: event.target.value }));
   const calculate = () => {
     const amount = Math.max(0, Number(form.amount) || 0);
-    const earned = form.type === 'Flights' ? Math.floor(amount / 5) : Math.floor(amount / 10);
+    const earned = calculateRewardPoints(form.type, amount);
     setPoints(earned);
     setMessage(`This booking earns ${earned.toLocaleString('en-IN')} points.`);
     return earned;
