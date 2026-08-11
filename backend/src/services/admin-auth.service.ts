@@ -1,4 +1,4 @@
-import argon2 from 'argon2';
+import { argon2idAsync } from '@noble/hashes/argon2';
 import { Request } from 'express';
 import { env } from '../config/env';
 import { query, withTransaction } from '../database/postgres';
@@ -10,7 +10,47 @@ const LOGIN_WINDOW_SECONDS = 15 * 60;
 const MAX_LOGIN_ATTEMPTS = 8;
 
 async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  if (storedHash.startsWith('$argon2')) return argon2.verify(storedHash, password);
+  if (storedHash.startsWith('$argon2id$')) {
+    try {
+      const match = storedHash.match(/^\$argon2id\$v=(\d+)\$([^$]+)\$([^$]+)\$([^$]+)$/);
+      if (!match) return false;
+
+      const [, versionRaw, parametersRaw, saltRaw, hashRaw] = match;
+      const parameters = Object.fromEntries(
+        parametersRaw!.split(',').map((parameter) => parameter.split('=', 2)),
+      );
+      const version = Number(versionRaw);
+      const memory = Number(parameters.m);
+      const iterations = Number(parameters.t);
+      const parallelism = Number(parameters.p);
+      if (
+        version !== 19
+        || !Number.isInteger(memory) || memory < 8 || memory > 262_144
+        || !Number.isInteger(iterations) || iterations < 1 || iterations > 10
+        || !Number.isInteger(parallelism) || parallelism < 1 || parallelism > 16
+      ) return false;
+
+      const salt = Buffer.from(saltRaw!, 'base64');
+      const expectedHash = Buffer.from(hashRaw!, 'base64');
+      if (salt.length < 8 || expectedHash.length < 16) return false;
+
+      const actualHash = await argon2idAsync(password, salt, {
+        version,
+        m: memory,
+        t: iterations,
+        p: parallelism,
+        dkLen: expectedHash.length,
+        maxmem: 2 ** 32 - 1,
+        asyncTick: 10,
+      });
+      return safeEqual(
+        Buffer.from(actualHash).toString('base64url'),
+        expectedHash.toString('base64url'),
+      );
+    } catch {
+      return false;
+    }
+  }
   if (/^[a-f0-9]{64}$/i.test(storedHash)) return safeEqual(sha256(password), storedHash.toLowerCase());
   return false;
 }
