@@ -1,0 +1,93 @@
+import { Response, Router } from 'express';
+import { z } from 'zod';
+import { redis } from '../database/redis';
+import { ApiError } from '../shared/api-error';
+import { sha256 } from '../shared/crypto';
+import { createDummyCustomerLogin, getCustomerDisplayProfile, registerPortalCustomer } from '../services/customer.service';
+import { getUnifiedDashboard } from '../services/reward.service';
+import { CUSTOMER_SESSION_COOKIE, requireCustomer } from '../middleware/customer-auth';
+import { env } from '../config/env';
+import { query } from '../database/postgres';
+import { listBookings } from '../services/booking.service';
+import { listRewards } from '../services/reward-catalog.service';
+
+const registrationSchema = z.object({
+  phone: z.string().trim().min(10).max(20),
+  name: z.string().trim().min(2).max(150),
+  email: z.string().trim().toLowerCase().email().max(255),
+  dateOfBirth: z.string().date().optional(),
+});
+const dummyLoginSchema = z.object({
+  phone: z.string().trim().min(10).max(20),
+  otp: z.string().regex(/^\d{4}$/, 'Enter any four digits.'),
+});
+
+export const portalRouter = Router();
+
+function setCustomerSessionCookie(response: Response, sessionToken: string): void {
+  response.cookie(CUSTOMER_SESSION_COOKIE, sessionToken, {
+    httpOnly: true,
+    secure: env.COOKIE_SECURE,
+    sameSite: env.COOKIE_SAME_SITE,
+    maxAge: env.CUSTOMER_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+    path: `${env.API_PREFIX}/portal`,
+  });
+}
+
+portalRouter.get('/rewards', async (_request, response) => {
+  response.status(200).json({ data: await listRewards() });
+});
+
+portalRouter.post('/customers/register', async (request, response) => {
+  const key = `portal-register:${sha256(request.ip ?? 'unknown')}`;
+  const attempts = await redis.incr(key);
+  if (attempts === 1) await redis.expire(key, 60 * 60);
+  if (attempts > 10) throw new ApiError(429, 'REGISTRATION_RATE_LIMITED', 'Too many registration attempts. Try again later.');
+
+  const input = registrationSchema.parse(request.body);
+  const registration = await registerPortalCustomer(input);
+  const [dashboard, bookings, rewards] = await Promise.all([
+    getUnifiedDashboard(registration.profile.phoneE164),
+    listBookings(registration.profile.phoneE164),
+    listRewards(),
+  ]);
+  setCustomerSessionCookie(response, registration.sessionToken);
+  response.status(201).json({ data: { profile: registration.profile, dashboard, bookings, rewards } });
+});
+
+portalRouter.post('/auth/dummy-login', async (request, response) => {
+  if (!env.ENABLE_DUMMY_OTP_AUTH) {
+    throw new ApiError(503, 'DUMMY_OTP_DISABLED', 'Dummy OTP login is disabled.');
+  }
+  const input = dummyLoginSchema.parse(request.body);
+  const rateLimitKey = `dummy-login:${sha256(`${request.ip ?? 'unknown'}:${input.phone}`)}`;
+  const attempts = await redis.incr(rateLimitKey);
+  if (attempts === 1) await redis.expire(rateLimitKey, 15 * 60);
+  if (attempts > 20) throw new ApiError(429, 'DUMMY_LOGIN_RATE_LIMITED', 'Too many login attempts. Try again later.');
+
+  const login = await createDummyCustomerLogin(input.phone);
+  const [dashboard, bookings, rewards] = await Promise.all([
+    getUnifiedDashboard(login.profile.phoneE164),
+    listBookings(login.profile.phoneE164),
+    listRewards(),
+  ]);
+  setCustomerSessionCookie(response, login.sessionToken);
+  response.status(200).json({ data: { profile: login.profile, dashboard, bookings, rewards } });
+});
+
+portalRouter.get('/session/dashboard', requireCustomer, async (_request, response) => {
+  const phoneE164 = response.locals.customer!.phoneE164;
+  const [profile, dashboard, bookings, rewards] = await Promise.all([
+    getCustomerDisplayProfile(phoneE164),
+    getUnifiedDashboard(phoneE164),
+    listBookings(phoneE164),
+    listRewards(),
+  ]);
+  response.status(200).json({ data: { profile, dashboard, bookings, rewards } });
+});
+
+portalRouter.post('/session/logout', requireCustomer, async (_request, response) => {
+  await query('UPDATE customer_sessions SET revoked_at = now() WHERE session_id = $1', [response.locals.customer!.sessionId]);
+  response.clearCookie(CUSTOMER_SESSION_COOKIE, { path: `${env.API_PREFIX}/portal` });
+  response.status(204).send();
+});

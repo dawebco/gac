@@ -1,0 +1,79 @@
+import argon2 from 'argon2';
+import { Request } from 'express';
+import { env } from '../config/env';
+import { query, withTransaction } from '../database/postgres';
+import { redis } from '../database/redis';
+import { ApiError } from '../shared/api-error';
+import { randomToken, safeEqual, sha256 } from '../shared/crypto';
+
+const LOGIN_WINDOW_SECONDS = 15 * 60;
+const MAX_LOGIN_ATTEMPTS = 8;
+
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  if (storedHash.startsWith('$argon2')) return argon2.verify(storedHash, password);
+  if (/^[a-f0-9]{64}$/i.test(storedHash)) return safeEqual(sha256(password), storedHash.toLowerCase());
+  return false;
+}
+
+async function enforceLoginRateLimit(username: string, request: Request): Promise<string> {
+  const discriminator = sha256(`${request.ip ?? 'unknown'}:${username.toLowerCase()}`);
+  const key = `admin-login:${discriminator}`;
+  const attempts = await redis.incr(key);
+  if (attempts === 1) await redis.expire(key, LOGIN_WINDOW_SECONDS);
+  if (attempts > MAX_LOGIN_ATTEMPTS) {
+    throw new ApiError(429, 'LOGIN_RATE_LIMITED', 'Too many login attempts. Try again later.');
+  }
+  return key;
+}
+
+export async function createAdminSession(username: string, password: string, request: Request) {
+  const rateLimitKey = await enforceLoginRateLimit(username, request);
+  const configuredUsername = env.ADMIN_USERNAME;
+  const configuredHash = env.ADMIN_PASSWORD_HASH;
+  if (!configuredUsername || !configuredHash) {
+    throw new ApiError(503, 'ADMIN_AUTH_NOT_CONFIGURED', 'Admin authentication is not configured.');
+  }
+
+  const passwordValid = await verifyPassword(password, configuredHash);
+  if (!safeEqual(username.trim().toLowerCase(), configuredUsername.toLowerCase()) || !passwordValid) {
+    throw new ApiError(401, 'ADMIN_CREDENTIALS_INVALID', 'Incorrect username or password.');
+  }
+  await redis.del(rateLimitKey);
+
+  const sessionToken = randomToken();
+  const csrfToken = randomToken(24);
+  const expiresAt = new Date(Date.now() + env.ADMIN_SESSION_TTL_HOURS * 60 * 60 * 1000);
+
+  const result = await query<{ session_id: string }>(
+    `INSERT INTO admin_sessions (
+      admin_username, token_hash, csrf_token_hash, user_agent, ip_address_hash, expires_at
+    ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING session_id`,
+    [
+      configuredUsername,
+      sha256(sessionToken),
+      sha256(csrfToken),
+      request.get('user-agent') ?? null,
+      sha256(request.ip ?? 'unknown'),
+      expiresAt,
+    ],
+  );
+
+  return { sessionId: result.rows[0]!.session_id, sessionToken, csrfToken, expiresAt, username: configuredUsername };
+}
+
+export async function revokeAdminSession(sessionId: string, username: string): Promise<void> {
+  await withTransaction(async (client) => {
+    await client.query('UPDATE admin_sessions SET revoked_at = now() WHERE session_id = $1 AND revoked_at IS NULL', [sessionId]);
+    await client.query(
+      `INSERT INTO admin_audit_logs (admin_username, action, entity_type, entity_id)
+       VALUES ($1, 'ADMIN_LOGOUT', 'ADMIN_SESSION', $2)`,
+      [username, sessionId],
+    );
+  });
+}
+
+export async function rotateAdminCsrfToken(sessionId: string): Promise<string> {
+  const csrfToken = randomToken(24);
+  await query('UPDATE admin_sessions SET csrf_token_hash = $1, last_seen_at = now() WHERE session_id = $2', [sha256(csrfToken), sessionId]);
+  return csrfToken;
+}

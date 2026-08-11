@@ -10,8 +10,12 @@
     "react-scripts": "5.0.1"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "concurrently --kill-others --names FRONTEND,BACKEND --prefix-colors blue,yellow \"npm:frontend\" \"npm:backend:dev\"",
+    "frontend": "react-scripts start",
     "build": "react-scripts build",
+    "backend:dev": "npm --prefix backend run dev",
+    "backend:build": "npm --prefix backend run build",
+    "backend:verify": "npm --prefix backend run verify:infra",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
@@ -31,5 +35,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4"
   }
 }

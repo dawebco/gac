@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle, Award, Briefcase, Calendar, CheckCircle2, ChevronDown, Download,
   ChevronRight, CircleDollarSign, Eye, EyeOff, Gift, History,
-  LayoutDashboard, Lock, LogOut, Mail, MapPin, Menu, Minus, Phone, Plus,
-  Search, ShieldCheck, Star, Trash2, User, UserRound, Users, WalletCards, X
+  ImagePlus, LayoutDashboard, Lock, LogOut, Mail, MapPin, Menu, Minus, Phone, Plus,
+  Save, Search, ShieldCheck, Star, Trash2, User, UserRound, Users, WalletCards, X
 } from 'lucide-react';
 import logoImg from './assets/logo-3.png';
 import './Admin.css';
@@ -20,6 +20,7 @@ import milestone10 from './assets/dashboard/assets/10.webp';
 import milestone11 from './assets/dashboard/assets/11.webp';
 import milestone12 from './assets/dashboard/assets/12.webp';
 import milestone13 from './assets/dashboard/assets/13.webp';
+import { adminApi, ApiClientError, portalApi } from './api';
 
 const heroBg = `${process.env.PUBLIC_URL}/imageeeee.png`;
 
@@ -63,15 +64,60 @@ const milestones = [
 ];
 
 const milestoneImages = [milestone1, milestone2, milestone3, milestone4, milestone5, milestone6, milestone7, milestone8, milestone9, milestone10, milestone11, milestone12, milestone13];
+const localRewardImages = {
+  FEATURED_BEACH_RESORT: milestone7,
+  FEATURED_TRAVEL_KIT: milestone1,
+  FEATURED_INTERNATIONAL: milestone3,
+  ...Object.fromEntries(milestones.map((_, index) => [`MILESTONE_${String([50000,100000,200000,300000,500000,1000000,1500000,2000000,5000000,7000000,10000000,15000000,20000000][index]).padStart(6, '0')}`, milestoneImages[index]])),
+};
+const rewardImage = reward => reward.imageUrl || localRewardImages[reward.code] || milestone1;
 
-function Dashboard({ customer, onLogout }) {
+function Dashboard({ customer, onLogout, onRefresh }) {
   const [view, setView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [rewardCatalog, setRewardCatalog] = useState(customer.rewards || []);
   const nav = [
     [LayoutDashboard, 'Dashboard', 'dashboard'], [Gift, 'Rewards', 'rewards'],
     [History, 'Purchase History', 'history'], [UserRound, 'Profile', 'profile'],
   ];
   const firstName = customer.name.trim().split(/\s+/)[0] || 'Customer';
+  const summary = customer.dashboard || {
+    availablePoints: 650,
+    totalBookings: 6,
+    totalPointsEarned: 1250,
+    totalPointsRedeemed: 600,
+  };
+  useEffect(() => {
+    if (!onRefresh) return undefined;
+    let refreshInFlight = false;
+    const refresh = async () => {
+      if (document.visibilityState !== 'visible' || refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        await onRefresh();
+      } catch {
+        // Keep the current dashboard visible if a background refresh fails.
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    const refreshTimer = window.setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [onRefresh]);
+  useEffect(() => {
+    setRewardCatalog(customer.rewards || []);
+  }, [customer.rewards]);
+  const featuredRewards = rewardCatalog.length ? rewardCatalog.filter(reward => reward.category === 'FEATURED').map(reward => [rewardImage(reward), reward.title, reward.description, `${reward.pointsRequired.toLocaleString('en-IN')} PTS`]) : rewards;
+  const milestoneRewards = rewardCatalog.length ? rewardCatalog.filter(reward => reward.category === 'MILESTONE').map(reward => [reward.pointsRequired.toLocaleString('en-IN'), reward.title, reward.description, rewardImage(reward)]) : milestones.map((reward, index) => [...reward, milestoneImages[index]]);
   const viewTitles = {
     history: ['Purchase History', 'Review points earned across your completed GAC Holidays journeys.'],
     rewards: ['Reward Milestones', 'Unlock more memorable rewards as your points balance grows.'],
@@ -96,34 +142,40 @@ function Dashboard({ customer, onLogout }) {
       <header><div><h1>{view === 'dashboard' ? <>Welcome back, {firstName.toLowerCase()}! <span className="welcome-wave">👋</span></> : viewTitles[view][0]}</h1><p>{view === 'dashboard' ? <>Track your points, explore rewards and continue your journey with <b>GAC Holidays.</b></> : viewTitles[view][1]}</p>{view === 'rewards' && <small className="rewards-action-label">REDEEM YOUR POINTS.</small>}</div>{view !== 'profile' && <button className="dashboard-user" onClick={() => setView('profile')} aria-label="Open profile"><i><User size={14}/></i><b>{firstName.toLowerCase()}</b></button>}</header>
       {view === 'dashboard' && <>
       <section className="summary-grid">
-        <article className="points-card"><div><small>TOTAL POINTS</small><i><Star size={17}/></i></div><h2>650 <span>PTS</span></h2><p>Available to redeem</p></article>
-        <Stat icon={Calendar} label="TOTAL BOOKINGS" value="6" detail="All time"/>
-        <Stat icon={WalletCards} label="POINTS EARNED" value="1,250" suffix="PTS" detail="All time"/>
-        <Stat icon={Gift} label="POINTS REDEEMED" value="600" detail="All time"/>
+        <article className="points-card"><div><small>TOTAL POINTS</small><i><Star size={17}/></i></div><h2>{summary.availablePoints.toLocaleString('en-IN')} <span>PTS</span></h2><p>Available to redeem</p></article>
+        <Stat icon={Calendar} label="TOTAL BOOKINGS" value={summary.totalBookings.toLocaleString('en-IN')} detail="All time"/>
+        <Stat icon={WalletCards} label="POINTS EARNED" value={summary.totalPointsEarned.toLocaleString('en-IN')} suffix="PTS" detail="All time"/>
+        <Stat icon={Gift} label="POINTS REDEEMED" value={summary.totalPointsRedeemed.toLocaleString('en-IN')} detail="All time"/>
       </section>
       <section className="dashboard-rewards">
         <div className="dashboard-rewards-title"><h2>Available Rewards</h2><button onClick={() => setView('rewards')}>View All Rewards <span>→</span></button></div>
-        <div className="reward-card-grid">{rewards.map(reward => <RewardCard key={reward[1]} reward={reward}/>)}</div>
+        <div className="reward-card-grid">{featuredRewards.map(reward => <RewardCard key={reward[1]} reward={reward}/>)}</div>
       </section>
       </>}
-      {view === 'history' && <section className="focused-view"><PurchaseHistory/></section>}
-      {view === 'rewards' && <section className="focused-view"><RewardsContent/></section>}
+      {view === 'history' && <section className="focused-view"><PurchaseHistory bookings={customer.bookingItems}/></section>}
+      {view === 'rewards' && <section className="focused-view"><RewardsContent rewardItems={milestoneRewards}/></section>}
       {view === 'profile' && <Profile customer={customer}/>}
     </main>
   </div>;
 }
 
-function PurchaseHistory() {
-  return <article className="panel history-panel"><div className="purchase-table"><div className="purchase-head"><span>DATE</span><span>DESCRIPTION</span><span>AMOUNT</span><span>PTS EARNED</span></div>{purchases.map(row => <div className="purchase-row" key={row[0]}>{row.map((cell, i) => <span key={cell} data-label={['Date','Description','Amount','Points'][i]}>{cell}</span>)}</div>)}</div><div className="panel-note"><AlertCircle size={14}/> Points are credited after the completion of the trip.</div></article>;
+function PurchaseHistory({ bookings }) {
+  const rows = bookings ? bookings.filter(booking => booking.status !== 'VOIDED').map(booking => [
+    new Date(`${booking.date}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+    `${booking.type} · ${booking.reference || booking.id}`,
+    `₹${booking.amount.toLocaleString('en-IN')}`,
+    booking.rewardPoints.toLocaleString('en-IN'),
+  ]) : purchases;
+  return <article className="panel history-panel"><div className="purchase-table"><div className="purchase-head"><span>DATE</span><span>DESCRIPTION</span><span>AMOUNT</span><span>PTS EARNED</span></div>{rows.map(row => <div className="purchase-row" key={`${row[0]}-${row[1]}`}>{row.map((cell, i) => <span key={`${cell}-${i}`} data-label={['Date','Description','Amount','Points'][i]}>{cell}</span>)}</div>)}{!rows.length && <div className="admin-empty"><Calendar size={20}/><span>No bookings are available yet.</span></div>}</div><div className="panel-note"><AlertCircle size={14}/> Points are credited after the completion of the trip.</div></article>;
 }
 
-function RewardsContent({ includeEarning = false }) {
+function RewardsContent({ includeEarning = false, rewardItems = milestones.map((reward, index) => [...reward, milestoneImages[index]]) }) {
   return <section className="journey-rewards">
         {includeEarning && <>
         <div className="rewards-heading"><div><span>GAC JOURNEY REWARDS</span><h2>Book. Earn. Experience.</h2><p>Every eligible booking takes you closer to your next reward.</p></div><Gift size={32}/></div>
         <div className="earning-section"><div className="section-heading"><small>HOW IT WORKS</small><h2>Points Earning</h2></div><div className="earning-rules">{earningRules.map(([name, spend, points]) => <article key={name}><i><CircleDollarSign size={22}/></i><div><h3>{name}</h3><p><b>{spend}</b> spent earns <strong>{points}</strong></p></div></article>)}</div></div>
         </>}
-        <div className="milestones-section"><div className="milestone-grid">{milestones.map(([points, title, description], index) => <article className="milestone-card" key={points}><div className="reward-placeholder"><img src={milestoneImages[index]} alt={title}/></div><div className="milestone-copy"><span className="milestone-number">{points} PTS</span><h3>{title}</h3><p>{description}</p></div></article>)}</div></div>
+        <div className="milestones-section"><div className="milestone-grid">{rewardItems.map(([points, title, description, image]) => <article className="milestone-card" key={`${points}-${title}`}><div className="reward-placeholder"><img src={image} alt={title}/></div><div className="milestone-copy"><span className="milestone-number">{points} PTS</span><h3>{title}</h3><p>{description}</p></div></article>)}</div></div>
         <div className="rewards-terms"><AlertCircle size={18}/><p><b>Reward terms:</b> Rewards are subject to availability and applicable terms. Flight benefits, hotel stays and travel experiences depend on partner availability. The brand, model, specifications and colour of merchandise will be decided by GAC Holidays at the time of redemption.</p></div>
       </section>;
 }
@@ -133,7 +185,8 @@ function RewardCard({ reward: [image, title, description, points] }) {
 }
 
 function Profile({ customer }) {
-  return <section className="profile-view"><div className="profile-hero"><i className="profile-avatar-icon" aria-hidden="true"><User size={38}/></i><div><small>GAC JOURNEY REWARDS MEMBER</small><h2>{customer.name}</h2><p>Manage your customer details and review your booking activity.</p></div></div><div className="profile-grid"><article><i><User size={20}/></i><small>FULL NAME</small><strong>{customer.name}</strong></article><article><i><Mail size={20}/></i><small>EMAIL ADDRESS</small><strong>{customer.email}</strong></article><article><i><Phone size={20}/></i><small>MOBILE NUMBER</small><strong>+91 {customer.phone}</strong></article><article><i><Briefcase size={20}/></i><small>TOTAL BOOKINGS</small><strong>6 bookings</strong></article></div><div className="profile-bookings"><PanelTitle title="Booking Summary"/><div className="profile-booking-stats"><div><b>6</b><span>Total bookings</span></div><div><b>4</b><span>Completed trips</span></div><div><b>2</b><span>Upcoming trips</span></div><div><b>1,250</b><span>Points earned</span></div></div></div></section>;
+  const summary = customer.dashboard || { totalBookings: 6, totalPointsEarned: 1250, availablePoints: 650, totalPointsRedeemed: 600 };
+  return <section className="profile-view"><div className="profile-hero"><i className="profile-avatar-icon" aria-hidden="true"><User size={38}/></i><div><small>GAC JOURNEY REWARDS MEMBER</small><h2>{customer.name}</h2><p>Manage your customer details and review your booking activity.</p></div></div><div className="profile-grid"><article><i><User size={20}/></i><small>FULL NAME</small><strong>{customer.name}</strong></article><article><i><Mail size={20}/></i><small>EMAIL ADDRESS</small><strong>{customer.email}</strong></article><article><i><Phone size={20}/></i><small>MOBILE NUMBER</small><strong>+91 {customer.phone}</strong></article><article><i><Briefcase size={20}/></i><small>TOTAL BOOKINGS</small><strong>{summary.totalBookings} bookings</strong></article></div><div className="profile-bookings"><PanelTitle title="Booking Summary"/><div className="profile-booking-stats"><div><b>{summary.totalBookings}</b><span>Total bookings</span></div><div><b>{summary.availablePoints.toLocaleString('en-IN')}</b><span>Available points</span></div><div><b>{summary.totalPointsRedeemed.toLocaleString('en-IN')}</b><span>Points redeemed</span></div><div><b>{summary.totalPointsEarned.toLocaleString('en-IN')}</b><span>Points earned</span></div></div></div></section>;
 }
 
 function Stat({ icon: Icon, label, value, suffix, detail }) {
@@ -157,21 +210,44 @@ function CustomerApp() {
   const dateRef = useRef(null);
   const [customer, setCustomer] = useState({ name: 'Numa', email: 'numa@example.com', phone: '9876543210' });
 
+  const applyPortalData = useCallback(data => {
+    setCustomer({
+      ...data.profile,
+      dashboard: data.dashboard,
+      bookingItems: data.bookings || [],
+      rewards: data.rewards || [],
+    });
+    return data;
+  }, []);
+
+  const refreshCustomer = useCallback(async () => {
+    try {
+      return applyPortalData(await portalApi.sessionDashboard());
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 401) return null;
+      throw error;
+    }
+  }, [applyPortalData]);
+
+  useEffect(() => {
+    refreshCustomer().then(data => { if (data) setMode('dashboard'); }).catch(() => undefined);
+  }, [refreshCustomer]);
+
   useEffect(() => {
     if (toast !== 'Dummy OTP sent. Enter any 4 digits.') return undefined;
     const dismissTimer = window.setTimeout(() => setToast(''), 3000);
     return () => window.clearTimeout(dismissTimer);
   }, [toast]);
 
-  if (mode === 'dashboard') return <Dashboard customer={customer} onLogout={() => { setMode('login'); setOtpSent(false); setOtp(['','','','']); }} />;
+  if (mode === 'dashboard') return <Dashboard customer={customer} onRefresh={refreshCustomer} onLogout={async () => { await portalApi.logout().catch(() => undefined); setMode('login'); setOtpSent(false); setOtp(['','','','']); }} />;
 
   const notify = (message, type = 'success') => { setToast(message); setToastType(type); };
   const validPhone = value => /^[6-9]\d{9}$/.test(value);
   const validEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
   const switchMode = next => { setMode(next); setOtpSent(false); setOtp(['','','','']); setToast(''); };
-  const register = (e) => { e.preventDefault(); if (regName.trim().length < 2) return notify('Please enter your full name.', 'error'); if (!validEmail(regEmail)) return notify('Enter a valid email address.', 'error'); if (!validPhone(regPhone)) return notify('Enter a valid 10-digit mobile number.', 'error'); if (!regDob) return notify('Please select your date of birth.', 'error'); setCustomer({name: regName.trim(), email: regEmail.trim().toLowerCase(), phone: regPhone}); setLoginPhone(regPhone); setMode('login'); setToast('Registration successful! You can now login.'); setToastType('success'); };
+  const register = async (e) => { e.preventDefault(); if (regName.trim().length < 2) return notify('Please enter your full name.', 'error'); if (!validEmail(regEmail)) return notify('Enter a valid email address.', 'error'); if (!validPhone(regPhone)) return notify('Enter a valid 10-digit mobile number.', 'error'); if (!regDob) return notify('Please select your date of birth.', 'error'); try { const data = await portalApi.register({ name: regName.trim(), email: regEmail.trim().toLowerCase(), phone: regPhone, dateOfBirth: regDob }); applyPortalData(data); setLoginPhone(regPhone); setMode('login'); setToast('Registration successful! You can now login.'); setToastType('success'); } catch (error) { notify(error.message || 'Registration failed. Please try again.', 'error'); } };
   const sendOtp = (e) => { e.preventDefault(); if (!validPhone(loginPhone)) return notify('Enter a valid 10-digit mobile number.', 'error'); notify('Dummy OTP sent. Enter any 4 digits.'); setOtpSent(true); };
-  const verify = (e) => { e.preventDefault(); if (otp.join('').length !== 4) return notify('Enter the complete 4-digit OTP.', 'error'); setMode('dashboard'); };
+  const verify = async (e) => { e.preventDefault(); const enteredOtp = otp.join(''); if (enteredOtp.length !== 4) return notify('Enter the complete 4-digit OTP.', 'error'); try { const data = applyPortalData(await portalApi.dummyLogin(loginPhone, enteredOtp)); if (data.profile.phone !== loginPhone) return notify('The customer session does not match this mobile number.', 'error'); setMode('dashboard'); setToast(''); } catch (error) { notify(error.message || 'Unable to load your account.', 'error'); } };
   const changeOtp = (index, value) => { const digit = value.replace(/\D/g, '').slice(-1); const next = [...otp]; next[index] = digit; setOtp(next); if (digit && index < 3) otpRefs.current[index + 1]?.focus(); };
   const phoneChange = setter => e => setter(e.target.value.replace(/\D/g, '').slice(0, 10));
 
@@ -182,51 +258,33 @@ function CustomerApp() {
   </div>;
 }
 
-const adminCustomers = [
-  { name: 'Rahul Sharma', phone: '9876543210', email: 'rahul.sharma@example.com', bookings: 5, points: 5450 },
-  { name: 'Priya Singh', phone: '9823456781', email: 'priya.singh@example.com', bookings: 3, points: 3125 },
-  { name: 'Amit Verma', phone: '9123456780', email: 'amit.verma@example.com', bookings: 4, points: 4320 },
-  { name: 'Neha Shah', phone: '9988776655', email: 'neha.shah@example.com', bookings: 2, points: 2280 },
-  { name: 'Karan Mehta', phone: '9870012345', email: 'karan.mehta@example.com', bookings: 6, points: 6600 },
-  { name: 'Ananya Rao', phone: '9845012387', email: 'ananya.rao@example.com', bookings: 2, points: 1940 },
-  { name: 'Vikram Nair', phone: '9900184521', email: 'vikram.nair@example.com', bookings: 7, points: 7820 },
-  { name: 'Meera Iyer', phone: '9741122086', email: 'meera.iyer@example.com', bookings: 1, points: 980 },
-].map((customer, customerIndex) => ({
-  ...customer,
-  bookingItems: Array.from({ length: customer.bookings }, (_, bookingIndex) => ({
-    id: `GAC-${customer.phone.slice(-4)}-${String(bookingIndex + 1).padStart(2, '0')}`,
-    type: ['Holidays', 'Hotels', 'Flights'][(customerIndex + bookingIndex) % 3],
-    amount: 12000 + (bookingIndex * 4500),
-    date: `2026-${String(((customerIndex + bookingIndex) % 8) + 1).padStart(2, '0')}-${String((bookingIndex % 20) + 5).padStart(2, '0')}`,
-    rewardPoints: 0,
-  })),
-}));
-
 function AdminPortal() {
   const [authenticated, setAuthenticated] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  useEffect(() => {
+    adminApi.restoreSession()
+      .then(() => setAuthenticated(true))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setCheckingSession(false));
+  }, []);
   const login = async event => {
     event.preventDefault();
     const normalizeCredential = value => value.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const enteredUsername = normalizeCredential(username).toLowerCase();
     const enteredPassword = normalizeCredential(password);
-    const configuredUsername = normalizeCredential(process.env.REACT_APP_ADMIN_USERNAME || '').toLowerCase();
-    const configuredPasswordHash = normalizeCredential(process.env.REACT_APP_ADMIN_PASSWORD_HASH || '').toLowerCase();
-    if (!configuredUsername || !configuredPasswordHash) {
-      setError('Admin login is not configured.');
-      return;
-    }
-    const passwordBytes = new TextEncoder().encode(enteredPassword);
-    const passwordDigest = await window.crypto.subtle.digest('SHA-256', passwordBytes);
-    const enteredPasswordHash = Array.from(new Uint8Array(passwordDigest), byte => byte.toString(16).padStart(2, '0')).join('');
-    if (enteredUsername === configuredUsername && enteredPasswordHash === configuredPasswordHash) {
+    try {
+      await adminApi.login(enteredUsername, enteredPassword);
       setAuthenticated(true);
       setError('');
-    } else setError('Incorrect username or password.');
+    } catch (loginError) {
+      setError(loginError.message || 'Incorrect username or password.');
+    }
   };
+  if (checkingSession) return <main className="admin-login" style={{backgroundImage: `url(${heroBg})`}}><div className="admin-login-shade"/></main>;
   if (!authenticated) return <main className="admin-login" style={{backgroundImage: `url(${heroBg})`}}>
     <div className="admin-login-shade"/>
     <header className="admin-login-brand"><img src={logoImg} alt="GAC Holidays"/><span>ADMIN PORTAL</span></header>
@@ -236,44 +294,91 @@ function AdminPortal() {
       <small><Lock size={13}/> Restricted access for authorized administrators.</small>
     </section>
   </main>;
-  return <AdminDashboard onLogout={() => { setAuthenticated(false); setPassword(''); }}/>;
+  return <AdminDashboard onLogout={async () => { await adminApi.logout().catch(() => undefined); setAuthenticated(false); setPassword(''); }}/>;
 }
 
 function AdminDashboard({ onLogout }) {
   const [section, setSection] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [customers, setCustomers] = useState(adminCustomers);
-  const [selectedCustomerPhone, setSelectedCustomerPhone] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [adminRewards, setAdminRewards] = useState([]);
+  const [overview, setOverview] = useState({ totalCustomers: 0, totalBookings: 0, totalPointsEarned: 0, totalPointsRedeemed: 0 });
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [dataError, setDataError] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
-  const selectedCustomer = customers.find(customer => customer.phone === selectedCustomerPhone) || null;
+  const refreshData = useCallback(async () => {
+    try {
+      const [nextCustomers, nextOverview, nextRewards] = await Promise.all([adminApi.customers(), adminApi.overview(), adminApi.rewards()]);
+      setCustomers(nextCustomers);
+      setOverview(nextOverview);
+      setAdminRewards(nextRewards);
+      setDataError('');
+      return nextCustomers;
+    } catch (error) {
+      setDataError(error.message || 'Unable to load admin data.');
+      return [];
+    }
+  }, []);
+  useEffect(() => {
+    refreshData();
+    let refreshInFlight = false;
+    const refresh = async () => {
+      if (document.visibilityState !== 'visible' || refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        await refreshData();
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshData();
+    };
+    const refreshTimer = window.setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [refreshData]);
+  const openCustomer = async customer => {
+    try {
+      setSelectedCustomer(await adminApi.customer(customer.phone));
+    } catch (error) {
+      setDataError(error.message || 'Unable to load customer details.');
+    }
+  };
   const sectionCopy = {
     dashboard: ['Dashboard', 'Welcome back, Admin!'],
     register: ['Register Customer', 'Create a customer profile and add their first booking.'],
     customers: ['Manage Customers', 'Search, review and manage every customer.'],
+    rewards: ['Manage Rewards', 'Update reward images and descriptions shown to every customer.'],
     reports: ['Generate Report', 'Filter booking data and prepare a summary.'],
   };
   const navItems = [
     ['dashboard', LayoutDashboard, 'Dashboard'],
     ['register', UserRound, 'Register Customer'],
     ['customers', Users, 'Manage Customers'],
+    ['rewards', Gift, 'Manage Rewards'],
     ['reports', Briefcase, 'Generate Report'],
   ];
   const metrics = [
-    [User, 'TOTAL CUSTOMERS', customers.length.toLocaleString('en-IN'), 'blue'],
-    [Calendar, 'TOTAL BOOKINGS', customers.reduce((sum, customer) => sum + customer.bookings, 0).toLocaleString('en-IN'), 'green'],
-    [Award, 'TOTAL POINTS EARNED', customers.reduce((sum, customer) => sum + customer.points, 0).toLocaleString('en-IN'), 'gold'],
-    [Gift, 'TOTAL POINTS REDEEMED', '18,750', 'purple'],
+    [User, 'TOTAL CUSTOMERS', overview.totalCustomers.toLocaleString('en-IN'), 'blue'],
+    [Calendar, 'TOTAL BOOKINGS', overview.totalBookings.toLocaleString('en-IN'), 'green'],
+    [Award, 'TOTAL POINTS EARNED', overview.totalPointsEarned.toLocaleString('en-IN'), 'gold'],
+    [Gift, 'TOTAL POINTS REDEEMED', overview.totalPointsRedeemed.toLocaleString('en-IN'), 'purple'],
   ];
   const goTo = nextSection => {
     setSection(nextSection);
     setSidebarOpen(false);
     setProfileOpen(false);
   };
-  const latestCustomers = customers.slice(-5).reverse();
-  const updateCustomer = updatedCustomer => setCustomers(current => current.map(customer => customer.phone === updatedCustomer.phone ? updatedCustomer : customer));
+  const latestCustomers = customers.slice(0, 5);
   const manageExistingCustomer = customer => {
     goTo('customers');
-    setSelectedCustomerPhone(customer.phone);
+    openCustomer(customer);
   };
 
   return <div className="admin-shell">
@@ -286,53 +391,56 @@ function AdminDashboard({ onLogout }) {
     </aside>
     <main className="admin-main">
       <header className="admin-workspace-header"><div><h1>{sectionCopy[section][0]}</h1><p>{sectionCopy[section][1]}</p></div><div className="admin-profile-wrap"><button className="admin-profile" onClick={() => setProfileOpen(value => !value)} aria-expanded={profileOpen}><i><User size={18}/></i><span><b>Admin</b><small>ADMINISTRATOR</small></span><ChevronDown size={16}/></button>{profileOpen && <div className="admin-profile-menu"><button onClick={onLogout}><LogOut size={15}/>Log out</button></div>}</div></header>
+      {dataError && <div className="admin-login-error" role="alert"><AlertCircle size={15}/>{dataError}</div>}
       {section === 'dashboard' && <>
         <section className="admin-kpis" aria-label="Summary metrics">{metrics.map(([Icon, label, value, tone]) => <article className="admin-kpi" key={label}><i className={tone}><Icon size={21}/></i><div><small>{label}</small><strong>{value}</strong></div></article>)}</section>
-        <AdminCustomersPanel customers={latestCustomers} latest onViewAll={() => goTo('customers')} onSelect={customer => setSelectedCustomerPhone(customer.phone)}/>
+        <AdminCustomersPanel customers={latestCustomers} latest onViewAll={() => goTo('customers')} onSelect={openCustomer}/>
       </>}
-      {section === 'register' && <AdminRegisterPanel customers={customers} onExistingCustomer={manageExistingCustomer} onRegister={customer => setCustomers(current => current.some(item => item.phone === customer.phone) ? current : [...current, customer])}/>}
-      {section === 'customers' && <AdminCustomersPanel customers={customers} searchable onSelect={customer => setSelectedCustomerPhone(customer.phone)}/>}
+      {section === 'register' && <AdminRegisterPanel customers={customers} onExistingCustomer={manageExistingCustomer} onRegister={async form => { const customer = await adminApi.createCustomer(form); await refreshData(); return customer; }}/>} 
+      {section === 'customers' && <AdminCustomersPanel customers={customers} searchable onSelect={openCustomer}/>} 
+      {section === 'rewards' && <AdminRewardsPanel rewards={adminRewards} onSaved={async updated => { setAdminRewards(current => current.map(reward => reward.id === updated.id ? updated : reward)); }}/>} 
       {section === 'reports' && <AdminReportPanel customers={customers}/>}
       <aside className="admin-info"><b>i</b><span>Reward points are calculated automatically based on the company's criteria and updated in the system.</span></aside>
     </main>
-    {selectedCustomer && <AdminCustomerManager customer={selectedCustomer} onChange={updateCustomer} onClose={() => setSelectedCustomerPhone(null)}/>}
+    {selectedCustomer && <AdminCustomerManager customer={selectedCustomer} onRefresh={async () => { const refreshed = await adminApi.customer(selectedCustomer.phone); setSelectedCustomer(refreshed); await refreshData(); return refreshed; }} onClose={() => setSelectedCustomer(null)}/>} 
   </div>;
 }
 
-function AdminCustomerManager({ customer, onChange, onClose }) {
+function AdminCustomerManager({ customer, onRefresh, onClose }) {
   const [activeTab, setActiveTab] = useState('bookings');
   const [bookingForm, setBookingForm] = useState({ type: 'Holidays', amount: '', date: new Date().toISOString().slice(0, 10) });
   const [rewardAmount, setRewardAmount] = useState('');
   const [feedback, setFeedback] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const updateBookingForm = event => setBookingForm(current => ({ ...current, [event.target.name]: event.target.value }));
-  const addBooking = event => {
+  const addBooking = async event => {
     event.preventDefault();
     const amount = Math.max(0, Number(bookingForm.amount) || 0);
     if (!amount || !bookingForm.date) {
       setFeedback('Enter a purchased amount and booking date.');
       return;
     }
-    const rewardPoints = calculateRewardPoints(bookingForm.type, amount);
-    const booking = {
-      id: `GAC-${customer.phone.slice(-4)}-${Date.now().toString().slice(-6)}`,
-      type: bookingForm.type,
-      amount,
-      date: bookingForm.date,
-      rewardPoints,
-    };
-    const bookingItems = [...customer.bookingItems, booking];
-    onChange({ ...customer, bookingItems, bookings: bookingItems.length, points: customer.points + rewardPoints });
-    setBookingForm(current => ({ ...current, amount: '' }));
-    setFeedback(`Booking added and ${rewardPoints.toLocaleString('en-IN')} reward points credited.`);
+    try {
+      const booking = await adminApi.addBooking(customer.phone, bookingForm);
+      await onRefresh();
+      setBookingForm(current => ({ ...current, amount: '' }));
+      setFeedback(`Booking added and ${booking.rewardPoints.toLocaleString('en-IN')} reward points credited.`);
+    } catch (error) {
+      setFeedback(error.message || 'Unable to add the booking.');
+    }
   };
-  const deleteBooking = booking => {
-    const bookingItems = customer.bookingItems.filter(item => item.id !== booking.id);
-    onChange({ ...customer, bookingItems, bookings: bookingItems.length, points: Math.max(0, customer.points - booking.rewardPoints) });
-    setConfirmDeleteId(null);
-    setFeedback(booking.rewardPoints ? `Booking deleted and ${booking.rewardPoints.toLocaleString('en-IN')} linked points removed.` : 'Booking deleted successfully.');
+  const deleteBooking = async booking => {
+    try {
+      await adminApi.voidBooking(customer.phone, booking.id);
+      await onRefresh();
+      setConfirmDeleteId(null);
+      setFeedback(booking.rewardPoints ? `Booking deleted and ${booking.rewardPoints.toLocaleString('en-IN')} linked points removed.` : 'Booking deleted successfully.');
+    } catch (error) {
+      setConfirmDeleteId(null);
+      setFeedback(error.message || 'Unable to delete the booking.');
+    }
   };
-  const adjustPoints = direction => {
+  const adjustPoints = async direction => {
     const amount = Math.floor(Math.max(0, Number(rewardAmount) || 0));
     if (!amount) {
       setFeedback('Enter a valid reward-points value.');
@@ -342,10 +450,14 @@ function AdminCustomerManager({ customer, onChange, onClose }) {
       setFeedback('Points to remove cannot exceed the available balance.');
       return;
     }
-    const points = direction === 'add' ? customer.points + amount : customer.points - amount;
-    onChange({ ...customer, points });
-    setRewardAmount('');
-    setFeedback(`${amount.toLocaleString('en-IN')} points ${direction === 'add' ? 'added' : 'removed'} successfully.`);
+    try {
+      await adminApi.adjustPoints(customer.phone, direction, amount);
+      await onRefresh();
+      setRewardAmount('');
+      setFeedback(`${amount.toLocaleString('en-IN')} points ${direction === 'add' ? 'added' : 'removed'} successfully.`);
+    } catch (error) {
+      setFeedback(error.message || 'Unable to adjust reward points.');
+    }
   };
 
   return <div className="admin-modal-backdrop" onClick={onClose}><section className="admin-customer-modal admin-customer-manager" onClick={event => event.stopPropagation()} aria-modal="true" role="dialog" aria-labelledby="customer-detail-title">
@@ -376,7 +488,20 @@ function AdminRegisterPanel({ customers, onRegister, onExistingCustomer }) {
   const [points, setPoints] = useState(0);
   const [message, setMessage] = useState('');
   const [existingCustomer, setExistingCustomer] = useState(null);
-  const update = event => setForm(current => ({ ...current, [event.target.name]: event.target.value }));
+  const [rewardsSent, setRewardsSent] = useState(false);
+  const update = event => {
+    setRewardsSent(false);
+    setForm(current => ({ ...current, [event.target.name]: event.target.value }));
+  };
+  const formComplete = form.name.trim().length >= 2
+    && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())
+    && /^\d{10}$/.test(form.phone)
+    && Boolean(form.type)
+    && Number(form.amount) > 0;
+  const sendRewards = () => {
+    if (!formComplete || rewardsSent) return;
+    setRewardsSent(true);
+  };
   const calculate = () => {
     const amount = Math.max(0, Number(form.amount) || 0);
     const earned = calculateRewardPoints(form.type, amount);
@@ -384,7 +509,7 @@ function AdminRegisterPanel({ customers, onRegister, onExistingCustomer }) {
     setMessage(`This booking earns ${earned.toLocaleString('en-IN')} points.`);
     return earned;
   };
-  const submit = event => {
+  const submit = async event => {
     event.preventDefault();
     if (!form.name.trim() || !form.email.trim() || !/^\d{10}$/.test(form.phone)) {
       setExistingCustomer(null);
@@ -397,19 +522,79 @@ function AdminRegisterPanel({ customers, onRegister, onExistingCustomer }) {
       setMessage('This mobile number is already registered.');
       return;
     }
-    const earned = calculate();
-    const firstBooking = { id: `GAC-${form.phone.slice(-4)}-${Date.now().toString().slice(-6)}`, type: form.type, amount: Number(form.amount) || 0, date: new Date().toISOString().slice(0, 10), rewardPoints: earned };
-    onRegister({ name: form.name.trim(), email: form.email.trim(), phone: form.phone, bookings: 1, points: earned, bookingItems: [firstBooking] });
-    setForm(emptyForm);
-    setPoints(0);
-    setExistingCustomer(null);
-    setMessage(`${form.name.trim()} was registered successfully.`);
+    calculate();
+    try {
+      await onRegister(form);
+      setForm(emptyForm);
+      setPoints(0);
+      setRewardsSent(false);
+      setExistingCustomer(null);
+      setMessage(`${form.name.trim()} was registered successfully.`);
+    } catch (error) {
+      if (error.code === 'ADMIN_CUSTOMER_EXISTS') {
+        setExistingCustomer({ phone: form.phone, name: form.name, email: form.email });
+        setMessage('This mobile number is already registered.');
+      } else {
+        setExistingCustomer(null);
+        setMessage(error.message || 'Unable to register the customer.');
+      }
+    }
   };
   return <section className="admin-form-card admin-register-card"><header><i><UserRound size={21}/></i><div><h2>Register a Customer</h2><p>Enter customer and booking details.</p></div></header><form onSubmit={submit}>
-    <div className="admin-form-grid"><label>Customer Name<input name="name" value={form.name} onChange={update} placeholder="Enter full name"/></label><label>Email Address<input name="email" type="email" value={form.email} onChange={update} placeholder="Enter email address"/></label><label>Mobile Number<input name="phone" inputMode="numeric" maxLength="10" value={form.phone} onChange={event => { setExistingCustomer(null); setForm(current => ({ ...current, phone: event.target.value.replace(/\D/g, '').slice(0, 10) })); }} placeholder="Enter unique mobile number"/></label><label>Booking Type<select name="type" value={form.type} onChange={update}><option>Flights</option><option>Hotels</option><option>Holidays</option></select></label><label>Purchased Amount (₹)<input name="amount" type="number" min="0" value={form.amount} onChange={update} placeholder="Enter amount"/></label></div>
-    <div className="admin-form-actions"><button type="button" className="admin-secondary-action" onClick={calculate}><CircleDollarSign size={18}/>Calculate Reward Points</button><button type="submit" className="admin-primary-action"><UserRound size={18}/>Register Customer</button></div>
+    <div className="admin-form-grid"><label>Customer Name<input name="name" value={form.name} onChange={update} placeholder="Enter full name"/></label><label>Email Address<input name="email" type="email" value={form.email} onChange={update} placeholder="Enter email address"/></label><label>Mobile Number<input name="phone" inputMode="numeric" maxLength="10" value={form.phone} onChange={event => { setExistingCustomer(null); setRewardsSent(false); setForm(current => ({ ...current, phone: event.target.value.replace(/\D/g, '').slice(0, 10) })); }} placeholder="Enter unique mobile number"/></label><label>Booking Type<select name="type" value={form.type} onChange={update}><option>Flights</option><option>Hotels</option><option>Holidays</option></select></label><label>Purchased Amount (₹)<input name="amount" type="number" min="0" value={form.amount} onChange={update} placeholder="Enter amount"/></label></div>
+    <div className="admin-form-actions"><button type="button" className="admin-secondary-action" onClick={calculate}><CircleDollarSign size={18}/>Calculate Reward Points</button><button type="button" className={`admin-send-rewards${rewardsSent ? ' sent' : ''}`} onClick={sendRewards} disabled={!formComplete || rewardsSent} aria-live="polite"><WhatsAppIcon/>{rewardsSent ? 'Message Sent!' : 'Send Rewards'}</button><button type="submit" className="admin-primary-action"><UserRound size={18}/>Register Customer</button></div>
     {(message || points > 0) && (existingCustomer ? <div className="admin-existing-customer" role="alert"><AlertCircle size={19}/><div><strong>User already exists</strong><span>{message} Manage the existing customer instead.</span></div><button type="button" onClick={() => onExistingCustomer(existingCustomer)}>Manage Customer<ChevronRight size={16}/></button></div> : <p className="admin-form-message" role="status">{message}</p>)}
   </form></section>;
+}
+
+function WhatsAppIcon() {
+  return <svg className="whatsapp-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.04 2a9.84 9.84 0 0 0-8.47 14.83L2 22l5.3-1.54A9.95 9.95 0 1 0 12.04 2Zm0 17.89a8 8 0 0 1-4.08-1.12l-.29-.17-3.15.92.94-3.07-.19-.31a7.93 7.93 0 1 1 6.77 3.75Zm4.37-5.95c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.93-1.19a7.25 7.25 0 0 1-1.34-1.67c-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.39-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.69 2.58 4.1 3.62.57.25 1.02.4 1.37.51.58.18 1.1.16 1.51.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>;
+}
+
+function AdminRewardsPanel({ rewards: rewardItems, onSaved }) {
+  const featured = rewardItems.filter(reward => reward.category === 'FEATURED');
+  const milestonesList = rewardItems.filter(reward => reward.category === 'MILESTONE');
+  return <section className="admin-rewards-manager">
+    <header className="admin-rewards-intro"><i><Gift size={22}/></i><div><h2>Customer Reward Catalog</h2><p>Upload a clearer image or edit the card copy. Saved changes appear on every customer dashboard.</p></div></header>
+    {[['Available Rewards', featured], ['Reward Milestones', milestonesList]].map(([heading, items]) => <section className="admin-reward-group" key={heading}><h3>{heading}</h3><div className="admin-reward-editor-grid">{items.map(reward => <AdminRewardEditor key={reward.id} reward={reward} onSaved={onSaved}/>)}</div></section>)}
+  </section>;
+}
+
+function AdminRewardEditor({ reward, onSaved }) {
+  const [title, setTitle] = useState(reward.title);
+  const [description, setDescription] = useState(reward.description);
+  const [image, setImage] = useState(null);
+  const [preview, setPreview] = useState('');
+  const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef(null);
+  useEffect(() => { setTitle(reward.title); setDescription(reward.description); }, [reward.title, reward.description]);
+  useEffect(() => {
+    if (!image) { setPreview(''); return undefined; }
+    const objectUrl = URL.createObjectURL(image);
+    setPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [image]);
+  const save = async event => {
+    event.preventDefault();
+    if (title.trim().length < 2 || description.trim().length < 3) { setMessage('Enter a title and description.'); return; }
+    setSaving(true);
+    setMessage('');
+    try {
+      const updated = await adminApi.updateReward(reward.id, { title: title.trim(), description: description.trim(), image });
+      onSaved(updated);
+      setImage(null);
+      setMessage('Saved successfully.');
+    } catch (error) {
+      setMessage(error.message || 'Unable to save this reward.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <form className="admin-reward-editor" onSubmit={save}>
+    <div className="admin-reward-image"><img src={preview || rewardImage(reward)} alt={title}/><button type="button" onClick={() => fileRef.current?.click()}><ImagePlus size={17}/>Change photo</button><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={event => { const file = event.target.files?.[0] || null; if (file && file.size > 8 * 1024 * 1024) { setMessage('Choose an image smaller than 8 MB.'); event.target.value = ''; return; } setImage(file); setMessage(''); }}/></div>
+    <div className="admin-reward-editor-copy"><span>{reward.pointsRequired.toLocaleString('en-IN')} PTS</span><label>Reward title<input value={title} onChange={event => setTitle(event.target.value)} maxLength="200"/></label><label>Description<textarea value={description} onChange={event => setDescription(event.target.value)} maxLength="2000" rows="3"/></label><button type="submit" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : 'Save Changes'}</button>{message && <small className={message.startsWith('Saved') ? 'success' : ''}>{message}</small>}</div>
+  </form>;
 }
 
 function AdminReportPanel({ customers }) {

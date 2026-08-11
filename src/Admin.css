@@ -331,6 +331,12 @@
 .admin-secondary-action:hover { background: #ffefad; }
 .admin-primary-action { border: 1px solid var(--admin-navy); background: var(--admin-navy); color: #fff; }
 .admin-primary-action:hover { background: var(--admin-navy-soft); }
+.admin-send-rewards { border: 1px solid #149f5b; background: #18ad62; color: #fff; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
+.admin-send-rewards:not(:disabled):hover { border-color: #0c8046; background: #0c914e; transform: translateY(-1px); }
+.admin-send-rewards:disabled { cursor: not-allowed; opacity: .55; }
+.admin-send-rewards.sent,
+.admin-send-rewards.sent:disabled { border-color: #87919d; background: #87919d; color: #fff; opacity: 1; }
+.admin-send-rewards .whatsapp-icon { width: 19px; height: 19px; flex: none; }
 .admin-form-message { margin: 15px 0 0; padding: 11px 13px; border-radius: 8px; background: #f0f8ff; color: #28527d; font-size: 11px; }
 
 .admin-report-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -445,4 +451,40 @@
   .admin-delete-confirm button { flex: 1; }
   .admin-existing-customer { grid-template-columns: auto 1fr; }
   .admin-existing-customer button { grid-column: 1 / -1; justify-content: center; }
+}
+
+.admin-rewards-manager { display: grid; gap: 22px; }
+.admin-rewards-intro { display: flex; gap: 12px; align-items: center; padding: 18px 20px; border: 1px solid #dfe6ef; border-radius: 14px; background: #fff; box-shadow: 0 10px 26px rgba(0,23,53,.05); }
+.admin-rewards-intro > i { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--admin-navy); }
+.admin-rewards-intro h2 { margin: 0 0 3px; font-size: 17px; color: var(--admin-navy); }
+.admin-rewards-intro p { margin: 0; font-size: 11px; color: #667892; }
+.admin-reward-group { display: grid; gap: 12px; }
+.admin-reward-group > h3 { margin: 0; font-size: 16px; color: var(--admin-navy); }
+.admin-reward-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.admin-reward-editor { overflow: hidden; display: grid; grid-template-columns: minmax(180px, .85fr) minmax(230px, 1.15fr); min-height: 265px; border: 1px solid #dfe6ef; border-radius: 14px; background: #fff; box-shadow: 0 10px 28px rgba(0,23,53,.05); }
+.admin-reward-image { position: relative; min-height: 220px; background: #eef2f7; }
+.admin-reward-image img { width: 100%; height: 100%; min-height: 220px; display: block; object-fit: cover; }
+.admin-reward-image button { position: absolute; left: 12px; bottom: 12px; min-height: 36px; padding: 0 13px; border: 1px solid rgba(255,255,255,.45); border-radius: 9px; display: inline-flex; align-items: center; gap: 7px; color: #fff; background: rgba(0,23,53,.9); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; backdrop-filter: blur(8px); }
+.admin-reward-editor-copy { min-width: 0; padding: 16px; display: grid; align-content: start; gap: 10px; }
+.admin-reward-editor-copy > span { width: max-content; padding: 6px 10px; border-radius: 999px; color: #fff; background: var(--admin-navy); font-size: 10px; font-weight: 800; }
+.admin-reward-editor-copy label { display: grid; gap: 5px; color: #526780; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.admin-reward-editor-copy input,
+.admin-reward-editor-copy textarea { width: 100%; box-sizing: border-box; border: 1px solid #d9e2ec; border-radius: 8px; padding: 9px 10px; color: var(--admin-navy); background: #fbfcfe; font: inherit; font-size: 11px; line-height: 1.4; outline: 0; resize: vertical; }
+.admin-reward-editor-copy input:focus,
+.admin-reward-editor-copy textarea:focus { border-color: #e5b900; box-shadow: 0 0 0 3px rgba(255,205,0,.13); }
+.admin-reward-editor-copy > button { min-height: 38px; border: 0; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; color: #ffc900; background: var(--admin-navy); font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.admin-reward-editor-copy > button:disabled { opacity: .65; cursor: wait; }
+.admin-reward-editor-copy > small { color: #c2413b; font-size: 9px; font-weight: 700; }
+.admin-reward-editor-copy > small.success { color: #07864b; }
+
+@media (max-width: 1180px) {
+  .admin-reward-editor-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 680px) {
+  .admin-rewards-intro { padding: 14px; align-items: flex-start; }
+  .admin-reward-editor { grid-template-columns: 1fr; }
+  .admin-reward-image,
+  .admin-reward-image img { min-height: 180px; max-height: 220px; }
+  .admin-reward-editor-copy { padding: 13px; }
 }

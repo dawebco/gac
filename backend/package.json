@@ -1,0 +1,48 @@
+{
+  "name": "gac-holidays-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production backend API for GAC Holidays",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:apply": "tsx src/scripts/apply-schema.ts",
+    "verify:infra": "tsx src/scripts/verify-infrastructure.ts",
+    "verify:api": "tsx src/scripts/verify-api.ts",
+    "verify:domain": "tsx src/scripts/verify-domain.ts",
+    "storage:ensure-rewards": "tsx src/scripts/ensure-reward-storage.ts"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "@upstash/redis": "^1.38.2",
+    "argon2": "^0.45.1",
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "multer": "^2.2.0",
+    "pg": "^8.23.0",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.8.1",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}
