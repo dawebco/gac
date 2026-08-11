@@ -53,3 +53,8 @@ app.use(`${env.API_PREFIX}/admin`, adminRouter);
 app.use(`${env.API_PREFIX}/portal`, portalRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
+
+// Vercel's Express runtime invokes the default export. Keep the named export
+// above for the local HTTP server and export the same instance as default for
+// serverless deployments.
+export default app;
