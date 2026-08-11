@@ -16,7 +16,7 @@
     "storage:ensure-rewards": "tsx src/scripts/ensure-reward-storage.ts"
   },
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "dependencies": {
     "@noble/hashes": "1.8.0",
