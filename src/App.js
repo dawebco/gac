@@ -29,6 +29,12 @@ const calculateRewardPoints = (bookingType, purchasedAmount) => {
   return bookingType === 'Flights' ? Math.floor(amount / 5) : Math.floor(amount);
 };
 
+const formatCustomerName = value => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return 'Customer';
+  return normalized.replace(/(^|[\s'-])([a-z])/g, (_, separator, letter) => `${separator}${letter.toUpperCase()}`);
+};
+
 const purchases = [
   ['12 Jan 2026', 'Goa Family Holiday Package', '₹45,000', '450'],
   ['25 Feb 2026', 'Hampi Group Tour', '₹12,500', '125'],
@@ -80,7 +86,8 @@ function Dashboard({ customer, onLogout, onRefresh }) {
     [LayoutDashboard, 'Dashboard', 'dashboard'], [Gift, 'Rewards', 'rewards'],
     [History, 'Purchase History', 'history'], [UserRound, 'Profile', 'profile'],
   ];
-  const firstName = customer.name.trim().split(/\s+/)[0] || 'Customer';
+  const displayName = formatCustomerName(customer.name);
+  const firstName = displayName.split(/\s+/)[0];
   const summary = customer.dashboard || {
     availablePoints: 650,
     totalBookings: 6,
@@ -139,7 +146,7 @@ function Dashboard({ customer, onLogout, onRefresh }) {
       <button className="dashboard-logout" onClick={onLogout}><LogOut size={17}/><span>Logout</span></button>
     </aside>
     <main className="dashboard-main">
-      <header><div><h1>{view === 'dashboard' ? <>Welcome back, {firstName.toLowerCase()}! <span className="welcome-wave">👋</span></> : viewTitles[view][0]}</h1><p>{view === 'dashboard' ? <>Track your points, explore rewards and continue your journey with <b>GAC Holidays.</b></> : viewTitles[view][1]}</p>{view === 'rewards' && <small className="rewards-action-label">REDEEM YOUR POINTS.</small>}</div>{view !== 'profile' && <button className="dashboard-user" onClick={() => setView('profile')} aria-label="Open profile"><i><User size={14}/></i><b>{firstName.toLowerCase()}</b></button>}</header>
+      <header><div><h1>{view === 'dashboard' ? <>Welcome back, {firstName}! <span className="welcome-wave">👋</span></> : viewTitles[view][0]}</h1><p>{view === 'dashboard' ? <>Track your points, explore rewards and continue your journey with <b>GAC Holidays.</b></> : viewTitles[view][1]}</p>{view === 'rewards' && <small className="rewards-action-label">REDEEM YOUR POINTS.</small>}</div>{view !== 'profile' && <button className="dashboard-user" onClick={() => setView('profile')} aria-label={`Open ${firstName}'s profile`}><i><User size={18}/></i><b>{firstName}</b></button>}</header>
       {view === 'dashboard' && <>
       <section className="summary-grid">
         <article className="points-card"><div><small>TOTAL POINTS</small><i><Star size={17}/></i></div><h2>{summary.availablePoints.toLocaleString('en-IN')} <span>PTS</span></h2><p>Available to redeem</p></article>
@@ -186,7 +193,8 @@ function RewardCard({ reward: [image, title, description, points] }) {
 
 function Profile({ customer }) {
   const summary = customer.dashboard || { totalBookings: 6, totalPointsEarned: 1250, availablePoints: 650, totalPointsRedeemed: 600 };
-  return <section className="profile-view"><div className="profile-hero"><i className="profile-avatar-icon" aria-hidden="true"><User size={38}/></i><div><small>GAC JOURNEY REWARDS MEMBER</small><h2>{customer.name}</h2><p>Manage your customer details and review your booking activity.</p></div></div><div className="profile-grid"><article><i><User size={20}/></i><small>FULL NAME</small><strong>{customer.name}</strong></article><article><i><Mail size={20}/></i><small>EMAIL ADDRESS</small><strong>{customer.email}</strong></article><article><i><Phone size={20}/></i><small>MOBILE NUMBER</small><strong>+91 {customer.phone}</strong></article><article><i><Briefcase size={20}/></i><small>TOTAL BOOKINGS</small><strong>{summary.totalBookings} bookings</strong></article></div><div className="profile-bookings"><PanelTitle title="Booking Summary"/><div className="profile-booking-stats"><div><b>{summary.totalBookings}</b><span>Total bookings</span></div><div><b>{summary.availablePoints.toLocaleString('en-IN')}</b><span>Available points</span></div><div><b>{summary.totalPointsRedeemed.toLocaleString('en-IN')}</b><span>Points redeemed</span></div><div><b>{summary.totalPointsEarned.toLocaleString('en-IN')}</b><span>Points earned</span></div></div></div></section>;
+  const displayName = formatCustomerName(customer.name);
+  return <section className="profile-view"><div className="profile-hero"><i className="profile-avatar-icon" aria-hidden="true"><User size={38}/></i><div><small>GAC JOURNEY REWARDS MEMBER</small><h2>{displayName}</h2><p>Manage your customer details and review your booking activity.</p></div></div><div className="profile-grid"><article><i><User size={20}/></i><small>FULL NAME</small><strong>{displayName}</strong></article><article><i><Mail size={20}/></i><small>EMAIL ADDRESS</small><strong>{customer.email}</strong></article><article><i><Phone size={20}/></i><small>MOBILE NUMBER</small><strong>+91 {customer.phone}</strong></article><article><i><Briefcase size={20}/></i><small>TOTAL BOOKINGS</small><strong>{summary.totalBookings} bookings</strong></article></div><div className="profile-bookings"><PanelTitle title="Booking Summary"/><div className="profile-booking-stats"><div><b>{summary.totalBookings}</b><span>Total bookings</span></div><div><b>{summary.availablePoints.toLocaleString('en-IN')}</b><span>Available points</span></div><div><b>{summary.totalPointsRedeemed.toLocaleString('en-IN')}</b><span>Points redeemed</span></div><div><b>{summary.totalPointsEarned.toLocaleString('en-IN')}</b><span>Points earned</span></div></div></div></section>;
 }
 
 function Stat({ icon: Icon, label, value, suffix, detail }) {

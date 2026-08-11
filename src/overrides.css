@@ -985,19 +985,21 @@
 }
 
 .dashboard-user {
-  min-width: 69px;
-  height: 28px;
-  padding: 3px 10px 3px 4px;
+  min-width: 104px;
+  height: 44px;
+  padding: 4px 15px 4px 5px;
   border: 1px solid #e3e7ef;
-  border-radius: 18px;
+  border-radius: 24px;
   background: #fff;
-  gap: 7px;
-  font-size: 10px;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .dashboard-user i {
-  width: 21px;
-  height: 21px;
+  width: 34px;
+  height: 34px;
+  flex: none;
   border-radius: 50%;
   background: #041536;
   color: #f6b500;
