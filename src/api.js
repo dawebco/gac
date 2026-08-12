@@ -4,6 +4,7 @@ const DEFAULT_API_URL = process.env.NODE_ENV === 'production'
 const API_BASE_URL = (process.env.REACT_APP_API_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
 let adminCsrfToken = '';
+let superAdminCsrfToken = '';
 
 export class ApiClientError extends Error {
   constructor(message, code = 'API_ERROR', status = 500, details) {
@@ -37,6 +38,13 @@ function adminMutation(path, options = {}) {
   return apiRequest(path, {
     ...options,
     headers: { ...options.headers, 'X-CSRF-Token': adminCsrfToken },
+  });
+}
+
+function superAdminMutation(path, options = {}) {
+  return apiRequest(path, {
+    ...options,
+    headers: { ...options.headers, 'X-CSRF-Token': superAdminCsrfToken },
   });
 }
 
@@ -123,15 +131,42 @@ export const adminApi = {
       method: 'DELETE', body: { reason: 'Booking removed by administrator' },
     });
   },
-  adjustPoints(phone, direction, points) {
+  adjustPoints(phone, direction, points, reason) {
     return adminMutation(`/admin/customers/${encodeURIComponent(phone)}/reward-adjustments`, {
       method: 'POST',
       headers: { 'Idempotency-Key': crypto.randomUUID() },
       body: {
         direction: direction === 'add' ? 'ADD' : 'REMOVE',
         points,
-        reason: direction === 'add' ? 'Manual reward credit by administrator' : 'Manual reward deduction by administrator',
+        reason,
       },
+    });
+  },
+};
+
+export const superAdminApi = {
+  async login(username, password) {
+    const data = await apiRequest('/superadmin/auth/login', { method: 'POST', body: { username, password } });
+    superAdminCsrfToken = data.csrfToken;
+    return data;
+  },
+  async restoreSession() {
+    const data = await apiRequest('/superadmin/auth/session');
+    superAdminCsrfToken = data.csrfToken;
+    return data;
+  },
+  async logout() {
+    try {
+      await superAdminMutation('/superadmin/auth/logout', { method: 'POST' });
+    } finally {
+      superAdminCsrfToken = '';
+    }
+  },
+  rewardRequests: status => apiRequest(`/superadmin/reward-requests?status=${encodeURIComponent(status || 'PENDING')}`),
+  reviewRewardRequest(requestId, decision, reviewNote = '') {
+    return superAdminMutation(`/superadmin/reward-requests/${requestId}/review`, {
+      method: 'POST',
+      body: { decision, ...(reviewNote.trim() ? { reviewNote: reviewNote.trim() } : {}) },
     });
   },
 };

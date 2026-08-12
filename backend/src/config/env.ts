@@ -38,6 +38,8 @@ const envSchema = z.object({
   UPSTASH_REDIS_REST_TOKEN: z.string().trim().min(10),
   ADMIN_USERNAME: z.string().trim().min(3).max(100).optional(),
   ADMIN_PASSWORD_HASH: z.string().trim().min(20).optional(),
+  SUPER_ADMIN_USERNAME: z.string().trim().min(3).max(100).optional(),
+  SUPER_ADMIN_PASSWORD_HASH: z.string().trim().min(20).optional(),
   REACT_APP_ADMIN_USERNAME: z.string().trim().min(3).max(100).optional(),
   REACT_APP_ADMIN_PASSWORD_HASH: z.string().trim().min(20).optional(),
   ADMIN_SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(12),

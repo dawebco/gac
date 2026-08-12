@@ -13,6 +13,8 @@ import { healthRouter } from './routes/health.routes';
 import { adminAuthRouter } from './routes/admin-auth.routes';
 import { adminRouter } from './routes/admin.routes';
 import { portalRouter } from './routes/portal.routes';
+import { superAdminAuthRouter } from './routes/superadmin-auth.routes';
+import { superAdminRouter } from './routes/superadmin.routes';
 
 export const app = express();
 
@@ -50,6 +52,8 @@ app.get('/', (_request, response) => {
 app.use(`${env.API_PREFIX}/health`, healthRouter);
 app.use(`${env.API_PREFIX}/admin/auth`, adminAuthRouter);
 app.use(`${env.API_PREFIX}/admin`, adminRouter);
+app.use(`${env.API_PREFIX}/superadmin/auth`, superAdminAuthRouter);
+app.use(`${env.API_PREFIX}/superadmin`, superAdminRouter);
 app.use(`${env.API_PREFIX}/portal`, portalRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);

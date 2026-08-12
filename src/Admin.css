@@ -124,6 +124,8 @@
 .admin-add-booking input:focus,
 .admin-add-booking select:focus,
 .admin-reward-manager input:focus { border-color: #ffbf00; box-shadow: 0 0 0 3px rgba(255,191,0,.13); }
+.admin-reward-request-fields { display: grid; grid-template-columns: .75fr 1.5fr; gap: 10px; }
+.admin-reward-request-fields label { color: #40516a; display: grid; gap: 6px; font-size: 9px; font-weight: 800; }
 .admin-add-booking > button { height: 38px; padding: 0 13px; border: 0; border-radius: 7px; background: #001735; color: #fff; display: flex; align-items: center; gap: 7px; font: 700 10px Inter, Arial, sans-serif; white-space: nowrap; cursor: pointer; }
 .admin-booking-list { margin-top: 15px; }
 .admin-booking-list-title { margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
@@ -449,6 +451,7 @@
   .admin-delete-booking,
   .admin-delete-confirm { grid-column: 1 / -1; width: 100%; }
   .admin-delete-confirm button { flex: 1; }
+  .admin-reward-request-fields { grid-template-columns: 1fr; }
   .admin-existing-customer { grid-template-columns: auto 1fr; }
   .admin-existing-customer button { grid-column: 1 / -1; justify-content: center; }
 }
@@ -487,4 +490,59 @@
   .admin-reward-image,
   .admin-reward-image img { min-height: 180px; max-height: 220px; }
   .admin-reward-editor-copy { padding: 13px; }
+}
+
+/* Super-admin approval dashboard — intentionally shares the admin design system. */
+.superadmin-nav-detail { margin: -2px 0 4px 39px; padding-left: 12px; border-left: 2px solid rgba(255,255,255,.15); color: #91a3bb; font-size: 9px; line-height: 28px; }
+.superadmin-error { margin: 0; padding: 11px 13px; border: 1px solid #fecaca; border-radius: 9px; background: #fff1f2; color: #b42318; }
+.superadmin-feedback { min-height: 42px; padding: 11px 14px; border: 1px solid #b8ead1; border-radius: 9px; background: #ecfdf5; color: #087443; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; }
+.superadmin-requests-card { flex: 1; min-height: 420px; padding: 22px; border: 1px solid #e2e7ee; border-radius: 16px; background: #fff; box-shadow: 0 8px 28px rgba(15,31,56,.055); }
+.superadmin-requests-card > header { margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.superadmin-requests-card > header > div { display: flex; align-items: center; gap: 9px; }
+.superadmin-requests-card > header span { color: #071a36; font-size: 11px; font-weight: 800; letter-spacing: .45px; }
+.superadmin-requests-card > header strong { min-width: 25px; height: 25px; padding: 0 7px; border-radius: 999px; background: #fff3c3; color: #806000; display: grid; place-items: center; font-size: 10px; }
+.superadmin-requests-card > header nav { padding: 3px; border-radius: 8px; background: #eef2f7; display: flex; gap: 3px; }
+.superadmin-requests-card > header nav button { min-height: 31px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #64748b; font: 700 10px Inter, Arial, sans-serif; cursor: pointer; }
+.superadmin-requests-card > header nav button.active { background: #fff; color: #001735; box-shadow: 0 2px 8px rgba(15,31,56,.1); }
+.superadmin-request-table { overflow: hidden; border: 1px solid #dfe5ec; border-radius: 10px; }
+.superadmin-request-head,
+.superadmin-request-row { display: grid; grid-template-columns: 1.35fr .78fr .85fr 1.45fr .8fr .68fr 1fr; gap: 12px; align-items: center; }
+.superadmin-request-head { min-height: 43px; padding: 0 13px; background: #001735; color: #fff; font-size: 9px; font-weight: 800; letter-spacing: .25px; }
+.superadmin-request-row { min-height: 62px; padding: 9px 13px; border-bottom: 1px solid #e6ebf1; color: #52627a; font-size: 10px; }
+.superadmin-request-row:last-of-type { border-bottom: 0; }
+.superadmin-request-row:hover { background: #fffaf0; }
+.superadmin-request-row > span { min-width: 0; overflow-wrap: anywhere; }
+.superadmin-request-row > span:first-child b,
+.superadmin-request-row > span:first-child small { display: block; }
+.superadmin-request-row > span:first-child b { color: #071a36; font-size: 11px; }
+.superadmin-request-row > span:first-child small { margin-top: 4px; color: #718096; font-size: 9px; }
+.superadmin-request-row .request-add { color: #07864b; font-weight: 800; }
+.superadmin-request-row .request-remove { color: #b7791f; font-weight: 800; }
+.superadmin-request-actions { display: flex; gap: 6px; }
+.superadmin-request-actions button { min-height: 31px; padding: 0 10px; border-radius: 6px; color: #fff; font: 700 9px Inter, Arial, sans-serif; cursor: pointer; }
+.superadmin-request-actions button:disabled { opacity: .55; cursor: wait; }
+.superadmin-request-actions .approve { border: 1px solid #087c43; background: #0c9b55; }
+.superadmin-request-actions .reject { border: 1px solid #c73939; background: #dc4b4b; }
+.superadmin-request-actions em { padding: 6px 9px; border-radius: 999px; font-size: 8px; font-style: normal; font-weight: 800; }
+.superadmin-request-actions em.approved { background: #dcfce7; color: #087443; }
+.superadmin-request-actions em.rejected { background: #fee2e2; color: #b42318; }
+
+@media (max-width: 1050px) {
+  .superadmin-request-head { display: none; }
+  .superadmin-request-table { padding: 10px; border: 0; background: #f3f6fa; display: grid; gap: 10px; }
+  .superadmin-request-row { min-height: 0; padding: 14px; border: 1px solid #dfe5ec; border-radius: 10px; background: #fff; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .superadmin-request-row > span::before { content: attr(data-label); margin-bottom: 5px; color: #8492a6; display: block; font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
+  .superadmin-request-actions { align-items: flex-end; }
+}
+
+@media (max-width: 650px) {
+  .superadmin-requests-card { min-height: 0; padding: 13px; }
+  .superadmin-requests-card > header { align-items: flex-start; flex-direction: column; }
+  .superadmin-requests-card > header nav { width: 100%; }
+  .superadmin-requests-card > header nav button { flex: 1; padding: 0 5px; }
+  .superadmin-request-table { margin: 0 -4px; padding: 7px; }
+  .superadmin-request-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 10px; }
+  .superadmin-request-row > span:nth-child(4),
+  .superadmin-request-actions { grid-column: 1 / -1; }
+  .superadmin-request-actions button { min-height: 36px; flex: 1; }
 }

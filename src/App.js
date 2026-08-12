@@ -20,7 +20,7 @@ import milestone10 from './assets/dashboard/assets/10.webp';
 import milestone11 from './assets/dashboard/assets/11.webp';
 import milestone12 from './assets/dashboard/assets/12.webp';
 import milestone13 from './assets/dashboard/assets/13.webp';
-import { adminApi, ApiClientError, portalApi } from './api';
+import { adminApi, ApiClientError, portalApi, superAdminApi } from './api';
 
 const heroBg = `${process.env.PUBLIC_URL}/imageeeee.png`;
 
@@ -418,6 +418,7 @@ function AdminCustomerManager({ customer, onRefresh, onClose }) {
   const [activeTab, setActiveTab] = useState('bookings');
   const [bookingForm, setBookingForm] = useState({ type: 'Holidays', amount: '', date: new Date().toISOString().slice(0, 10) });
   const [rewardAmount, setRewardAmount] = useState('');
+  const [rewardReason, setRewardReason] = useState('');
   const [feedback, setFeedback] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const updateBookingForm = event => setBookingForm(current => ({ ...current, [event.target.name]: event.target.value }));
@@ -454,15 +455,19 @@ function AdminCustomerManager({ customer, onRefresh, onClose }) {
       setFeedback('Enter a valid reward-points value.');
       return;
     }
+    if (rewardReason.trim().length < 3) {
+      setFeedback('Enter a reason for this reward-points request.');
+      return;
+    }
     if (direction === 'remove' && amount > customer.points) {
       setFeedback('Points to remove cannot exceed the available balance.');
       return;
     }
     try {
-      await adminApi.adjustPoints(customer.phone, direction, amount);
-      await onRefresh();
+      await adminApi.adjustPoints(customer.phone, direction, amount, rewardReason.trim());
       setRewardAmount('');
-      setFeedback(`${amount.toLocaleString('en-IN')} points ${direction === 'add' ? 'added' : 'removed'} successfully.`);
+      setRewardReason('');
+      setFeedback(`Request sent. ${amount.toLocaleString('en-IN')} points will be ${direction === 'add' ? 'added' : 'removed'} only after super-admin approval.`);
     } catch (error) {
       setFeedback(error.message || 'Unable to adjust reward points.');
     }
@@ -473,7 +478,7 @@ function AdminCustomerManager({ customer, onRefresh, onClose }) {
     <header className="admin-customer-manager-header"><i><User size={24}/></i><div><h2 id="customer-detail-title">{customer.name}</h2><p>{customer.email}</p><span>+91 {customer.phone}</span></div></header>
     <div className="admin-customer-stats"><div><small>TOTAL BOOKINGS</small><strong>{customer.bookings}</strong></div><div><small>AVAILABLE POINTS</small><strong>{customer.points.toLocaleString('en-IN')} <em>PTS</em></strong></div></div>
     <nav className="admin-manager-tabs" aria-label="Customer management"><button type="button" className={activeTab === 'bookings' ? 'active' : ''} onClick={() => { setActiveTab('bookings'); setFeedback(''); }}><Calendar size={17}/>Bookings</button><button type="button" className={activeTab === 'rewards' ? 'active' : ''} onClick={() => { setActiveTab('rewards'); setFeedback(''); }}><Award size={17}/>Reward Points</button></nav>
-    {activeTab === 'bookings' ? <div className="admin-manager-panel"><form className="admin-add-booking" onSubmit={addBooking}><label>Booking Type<select name="type" value={bookingForm.type} onChange={updateBookingForm}><option>Flights</option><option>Hotels</option><option>Holidays</option></select></label><label>Booking Date<input name="date" type="date" value={bookingForm.date} onChange={updateBookingForm}/></label><label>Purchased Amount (₹)<input name="amount" type="number" min="1" value={bookingForm.amount} onChange={updateBookingForm} placeholder="Enter amount"/></label><button type="submit"><Plus size={17}/>Add Booking</button></form><div className="admin-booking-list"><div className="admin-booking-list-title"><h3>Existing Bookings</h3><span>{customer.bookings} total</span></div>{customer.bookingItems.length ? customer.bookingItems.map(booking => <article className="admin-booking-item" key={booking.id}><div><strong>{booking.type}</strong><small>{booking.id} · {booking.date}</small></div><div className="admin-booking-values"><strong>₹{booking.amount.toLocaleString('en-IN')}</strong>{booking.rewardPoints > 0 && <small>+{booking.rewardPoints.toLocaleString('en-IN')} PTS</small>}</div>{confirmDeleteId === booking.id ? <div className="admin-delete-confirm"><button type="button" onClick={() => deleteBooking(booking)}>Confirm</button><button type="button" onClick={() => setConfirmDeleteId(null)}>Cancel</button></div> : <button type="button" className="admin-delete-booking" onClick={() => setConfirmDeleteId(booking.id)} aria-label={`Delete ${booking.id}`}><Trash2 size={16}/></button>}</article>) : <div className="admin-no-bookings"><Calendar size={22}/><span>No bookings for this customer.</span></div>}</div></div> : <div className="admin-manager-panel admin-reward-manager"><div className="admin-reward-balance"><i><Award size={23}/></i><div><small>AVAILABLE REWARD POINTS</small><strong>{customer.points.toLocaleString('en-IN')} <em>PTS</em></strong></div></div><label>Points to adjust<input type="number" min="1" value={rewardAmount} onChange={event => setRewardAmount(event.target.value)} placeholder="Enter points"/></label><div className="admin-reward-actions"><button type="button" className="add" onClick={() => adjustPoints('add')}><Plus size={17}/>Add Points</button><button type="button" className="remove" onClick={() => adjustPoints('remove')}><Minus size={17}/>Remove Points</button></div><p>Every adjustment updates this customer’s available balance immediately.</p></div>}
+    {activeTab === 'bookings' ? <div className="admin-manager-panel"><form className="admin-add-booking" onSubmit={addBooking}><label>Booking Type<select name="type" value={bookingForm.type} onChange={updateBookingForm}><option>Flights</option><option>Hotels</option><option>Holidays</option></select></label><label>Booking Date<input name="date" type="date" value={bookingForm.date} onChange={updateBookingForm}/></label><label>Purchased Amount (₹)<input name="amount" type="number" min="1" value={bookingForm.amount} onChange={updateBookingForm} placeholder="Enter amount"/></label><button type="submit"><Plus size={17}/>Add Booking</button></form><div className="admin-booking-list"><div className="admin-booking-list-title"><h3>Existing Bookings</h3><span>{customer.bookings} total</span></div>{customer.bookingItems.length ? customer.bookingItems.map(booking => <article className="admin-booking-item" key={booking.id}><div><strong>{booking.type}</strong><small>{booking.id} · {booking.date}</small></div><div className="admin-booking-values"><strong>₹{booking.amount.toLocaleString('en-IN')}</strong>{booking.rewardPoints > 0 && <small>+{booking.rewardPoints.toLocaleString('en-IN')} PTS</small>}</div>{confirmDeleteId === booking.id ? <div className="admin-delete-confirm"><button type="button" onClick={() => deleteBooking(booking)}>Confirm</button><button type="button" onClick={() => setConfirmDeleteId(null)}>Cancel</button></div> : <button type="button" className="admin-delete-booking" onClick={() => setConfirmDeleteId(booking.id)} aria-label={`Delete ${booking.id}`}><Trash2 size={16}/></button>}</article>) : <div className="admin-no-bookings"><Calendar size={22}/><span>No bookings for this customer.</span></div>}</div></div> : <div className="admin-manager-panel admin-reward-manager"><div className="admin-reward-balance"><i><Award size={23}/></i><div><small>AVAILABLE REWARD POINTS</small><strong>{customer.points.toLocaleString('en-IN')} <em>PTS</em></strong></div></div><div className="admin-reward-request-fields"><label>Points to adjust<input type="number" min="1" value={rewardAmount} onChange={event => setRewardAmount(event.target.value)} placeholder="Enter points"/></label><label>Reason for adjustment<input type="text" maxLength="500" value={rewardReason} onChange={event => setRewardReason(event.target.value)} placeholder="Enter a clear reason"/></label></div><div className="admin-reward-actions"><button type="button" className="add" onClick={() => adjustPoints('add')}><Plus size={17}/>Request Add</button><button type="button" className="remove" onClick={() => adjustPoints('remove')}><Minus size={17}/>Request Remove</button></div><p>Requests do not change the balance until they are approved by the super admin.</p></div>}
     {feedback && <div className="admin-manager-feedback" role="status">{feedback}</div>}
   </section></div>;
 }
@@ -641,12 +646,132 @@ function AdminReportPanel({ customers }) {
   </form>{report && <section className="admin-report-preview" aria-label="Report preview"><header><div><h3>Report Preview</h3><p>Generated {report.generatedAt}</p></div><button type="button" onClick={downloadExcel}><Download size={17}/>Download Excel</button></header><div className="admin-report-result"><div><small>CUSTOMERS</small><strong>{report.customers}</strong></div><div><small>BOOKINGS</small><strong>{report.bookings}</strong></div><div><small>TYPE</small><strong>{report.type}</strong></div><div><small>DATE RANGE</small><strong>{report.range}</strong></div></div><div className="admin-report-table-wrap"><table className="admin-report-table"><thead><tr><th>Customer</th><th>Phone</th><th>Bookings</th><th>Points</th></tr></thead><tbody>{report.rows.map(customer => <tr key={customer.phone}><td><strong>{customer.name}</strong><small>{customer.email}</small></td><td>{customer.phone}</td><td>{customer.bookings}</td><td>{customer.points}</td></tr>)}</tbody></table></div></section>}</section>;
 }
 
+function SuperAdminPortal() {
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    superAdminApi.restoreSession()
+      .then(() => setAuthenticated(true))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setCheckingSession(false));
+  }, []);
+
+  const login = async event => {
+    event.preventDefault();
+    const normalizeCredential = value => value.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    try {
+      await superAdminApi.login(normalizeCredential(username).toLowerCase(), normalizeCredential(password));
+      setAuthenticated(true);
+      setError('');
+    } catch (loginError) {
+      setError(loginError.message || 'Incorrect username or password.');
+    }
+  };
+
+  if (checkingSession) return <main className="admin-login" style={{backgroundImage: `url(${heroBg})`}}><div className="admin-login-shade"/></main>;
+  if (!authenticated) return <main className="admin-login" style={{backgroundImage: `url(${heroBg})`}}>
+    <div className="admin-login-shade"/>
+    <header className="admin-login-brand"><img src={logoImg} alt="GAC Holidays"/><span>SUPER ADMIN PORTAL</span></header>
+    <section className="admin-login-card" aria-labelledby="superadmin-login-title">
+      <div className="admin-login-icon"><ShieldCheck size={28}/></div><h1 id="superadmin-login-title">Super Admin Login</h1><p>Review and authorize reward-point requests.</p>
+      <form onSubmit={login}><label htmlFor="superadmin-username">Username</label><div className="admin-login-field"><User size={18}/><input id="superadmin-username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={event => { setUsername(event.target.value); setError(''); }} placeholder="Enter super-admin username"/></div><label htmlFor="superadmin-password">Password</label><div className="admin-login-field"><Lock size={18}/><input id="superadmin-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" autoCapitalize="none" spellCheck={false} value={password} onChange={event => { setPassword(event.target.value); setError(''); }} placeholder="Enter super-admin password"/><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}</button></div>{error && <div className="admin-login-error" role="alert"><AlertCircle size={15}/>{error}</div>}<button className="admin-login-submit" type="submit">Login to Dashboard</button></form>
+      <small><Lock size={13}/> Restricted access for the system administrator.</small>
+    </section>
+  </main>;
+  return <SuperAdminDashboard onLogout={async () => { await superAdminApi.logout().catch(() => undefined); setAuthenticated(false); setPassword(''); }}/>;
+}
+
+function SuperAdminDashboard({ onLogout }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [status, setStatus] = useState('PENDING');
+  const [requests, setRequests] = useState([]);
+  const [busyId, setBusyId] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [dataError, setDataError] = useState('');
+
+  const refreshRequests = useCallback(async () => {
+    try {
+      setRequests(await superAdminApi.rewardRequests(status));
+      setDataError('');
+    } catch (error) {
+      setDataError(error.message || 'Unable to load reward requests.');
+    }
+  }, [status]);
+
+  useEffect(() => {
+    refreshRequests();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshRequests();
+    }, 30000);
+    const refreshOnFocus = () => refreshRequests();
+    window.addEventListener('focus', refreshOnFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refreshOnFocus); };
+  }, [refreshRequests]);
+
+  const review = async (request, decision) => {
+    setBusyId(request.id);
+    setFeedback('');
+    try {
+      await superAdminApi.reviewRewardRequest(request.id, decision);
+      setFeedback(decision === 'APPROVE'
+        ? `${request.points.toLocaleString('en-IN')} points ${request.direction === 'ADD' ? 'added to' : 'removed from'} ${request.customerName}.`
+        : `Request for ${request.customerName} rejected.`);
+      await refreshRequests();
+    } catch (error) {
+      setDataError(error.message || 'Unable to review the request.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  return <div className="admin-shell superadmin-shell">
+    <header className="admin-mobile-bar"><img src={logoImg} alt="GAC Holidays"/><button type="button" onClick={() => setSidebarOpen(true)} aria-label="Open super-admin menu"><Menu size={27}/></button></header>
+    <button className={`admin-sidebar-backdrop ${sidebarOpen ? 'visible' : ''}`} type="button" onClick={() => setSidebarOpen(false)} aria-label="Close super-admin menu"/>
+    <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <div className="admin-sidebar-brand"><div><b><span>GAC</span>Holidays</b><small>POINTS SYSTEM</small></div><button type="button" onClick={() => setSidebarOpen(false)} aria-label="Close super-admin menu"><X size={22}/></button></div>
+      <nav aria-label="Super-admin navigation"><button type="button" className="active" onClick={() => setSidebarOpen(false)}><LayoutDashboard size={19}/><span>Dashboard</span></button><small className="superadmin-nav-detail">Manage point requests</small></nav>
+      <button type="button" className="admin-sidebar-logout" onClick={onLogout}><LogOut size={19}/><span>Logout</span></button>
+    </aside>
+    <main className="admin-main">
+      <header className="admin-workspace-header"><div><h1>Requests</h1><p>Review manual reward-point changes submitted by administrators.</p></div><div className="admin-profile-wrap"><button className="admin-profile" onClick={() => setProfileOpen(value => !value)} aria-expanded={profileOpen}><i><User size={18}/></i><span><b>Super Admin</b><small>SYSTEM ADMINISTRATOR</small></span><ChevronDown size={16}/></button>{profileOpen && <div className="admin-profile-menu"><button onClick={onLogout}><LogOut size={15}/>Log out</button></div>}</div></header>
+      {dataError && <div className="admin-login-error superadmin-error" role="alert"><AlertCircle size={15}/>{dataError}</div>}
+      {feedback && <div className="superadmin-feedback" role="status"><CheckCircle2 size={16}/>{feedback}</div>}
+      <section className="superadmin-requests-card">
+        <header><div><span>POINTS REQUESTS</span><strong>{requests.length}</strong></div><nav aria-label="Request status filter">{['PENDING', 'APPROVED', 'REJECTED'].map(filter => <button type="button" key={filter} className={status === filter ? 'active' : ''} onClick={() => { setStatus(filter); setFeedback(''); }}>{filter.charAt(0) + filter.slice(1).toLowerCase()}</button>)}</nav></header>
+        <div className="superadmin-request-table" role="table" aria-label={`${status.toLowerCase()} reward point requests`}>
+          <div className="superadmin-request-head" role="row"><span>Customer</span><span>Request</span><span>Current Points</span><span>Reason</span><span>Requested By</span><span>Date</span><span>Action</span></div>
+          {requests.map(request => <article className="superadmin-request-row" role="row" key={request.id}>
+            <span data-label="Customer"><b>{request.customerName}</b><small>{request.phoneE164}</small></span>
+            <span data-label="Request" className={request.direction === 'ADD' ? 'request-add' : 'request-remove'}>{request.direction === 'ADD' ? '+' : '−'}{request.points.toLocaleString('en-IN')} PTS</span>
+            <span data-label="Current Points">{request.currentPoints.toLocaleString('en-IN')} PTS</span>
+            <span data-label="Reason">{request.reason}</span>
+            <span data-label="Requested By">{request.requestedBy}</span>
+            <span data-label="Date">{new Date(request.requestedAt).toLocaleDateString('en-IN')}</span>
+            <span data-label="Action" className="superadmin-request-actions">{request.status === 'PENDING' ? <><button type="button" className="approve" disabled={busyId === request.id} onClick={() => review(request, 'APPROVE')}>Approve</button><button type="button" className="reject" disabled={busyId === request.id} onClick={() => review(request, 'REJECT')}>Reject</button></> : <em className={request.status.toLowerCase()}>{request.status}</em>}</span>
+          </article>)}
+          {!requests.length && <div className="admin-empty"><CheckCircle2 size={25}/><span>No {status.toLowerCase()} point requests.</span></div>}
+        </div>
+      </section>
+      <aside className="admin-info"><b>i</b><span>Approve only verified requests. Points change immediately after approval; rejected requests never affect the customer balance.</span></aside>
+    </main>
+  </div>;
+}
+
 function FixedPhoneInput({ id, value, onChange }) { return <div className="fixed-phone"><span>+91</span><input id={id} type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="Enter your mobile number" value={value} onChange={onChange}/></div>; }
 
 function Feature({ icon: Icon, title, text }) { return <div className="feature-item"><div className="feature-icon-badge"><Icon size={16}/></div><h3 className="feature-title">{title}</h3><p className="feature-desc">{text}</p></div>; }
 
 function App() {
-  return window.location.pathname.replace(/\/+$/, '') === '/admin' ? <AdminPortal/> : <CustomerApp/>;
+  const route = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (route === '/superadmin') return <SuperAdminPortal/>;
+  if (route === '/admin') return <AdminPortal/>;
+  return <CustomerApp/>;
 }
 
 export default App;

@@ -55,9 +55,9 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
   return false;
 }
 
-async function enforceLoginRateLimit(username: string, request: Request): Promise<string> {
+async function enforceLoginRateLimit(username: string, request: Request, scope: 'admin' | 'superadmin'): Promise<string> {
   const discriminator = sha256(`${request.ip ?? 'unknown'}:${username.toLowerCase()}`);
-  const key = `admin-login:${discriminator}`;
+  const key = `${scope}-login:${discriminator}`;
   const attempts = await redis.incr(key);
   if (attempts === 1) await redis.expire(key, LOGIN_WINDOW_SECONDS);
   if (attempts > MAX_LOGIN_ATTEMPTS) {
@@ -66,16 +66,23 @@ async function enforceLoginRateLimit(username: string, request: Request): Promis
   return key;
 }
 
-export async function createAdminSession(username: string, password: string, request: Request) {
-  const rateLimitKey = await enforceLoginRateLimit(username, request);
-  const configuredUsername = env.ADMIN_USERNAME;
-  const configuredHash = env.ADMIN_PASSWORD_HASH;
+async function createPrivilegedSession(input: {
+  username: string;
+  password: string;
+  request: Request;
+  scope: 'admin' | 'superadmin';
+  configuredUsername?: string;
+  configuredHash?: string;
+}) {
+  const rateLimitKey = await enforceLoginRateLimit(input.username, input.request, input.scope);
+  const configuredUsername = input.configuredUsername;
+  const configuredHash = input.configuredHash;
   if (!configuredUsername || !configuredHash) {
-    throw new ApiError(503, 'ADMIN_AUTH_NOT_CONFIGURED', 'Admin authentication is not configured.');
+    throw new ApiError(503, 'AUTH_NOT_CONFIGURED', `${input.scope === 'superadmin' ? 'Super-admin' : 'Admin'} authentication is not configured.`);
   }
 
-  const passwordValid = await verifyPassword(password, configuredHash);
-  if (!safeEqual(username.trim().toLowerCase(), configuredUsername.toLowerCase()) || !passwordValid) {
+  const passwordValid = await verifyPassword(input.password, configuredHash);
+  if (!safeEqual(input.username.trim().toLowerCase(), configuredUsername.toLowerCase()) || !passwordValid) {
     throw new ApiError(401, 'ADMIN_CREDENTIALS_INVALID', 'Incorrect username or password.');
   }
   await redis.del(rateLimitKey);
@@ -92,8 +99,8 @@ export async function createAdminSession(username: string, password: string, req
       configuredUsername,
       sha256(sessionToken),
       sha256(csrfToken),
-      request.get('user-agent') ?? null,
-      sha256(request.ip ?? 'unknown'),
+      input.request.get('user-agent') ?? null,
+      sha256(input.request.ip ?? 'unknown'),
       expiresAt,
     ],
   );
@@ -101,13 +108,29 @@ export async function createAdminSession(username: string, password: string, req
   return { sessionId: result.rows[0]!.session_id, sessionToken, csrfToken, expiresAt, username: configuredUsername };
 }
 
-export async function revokeAdminSession(sessionId: string, username: string): Promise<void> {
+export function createAdminSession(username: string, password: string, request: Request) {
+  return createPrivilegedSession({
+    username, password, request, scope: 'admin',
+    configuredUsername: env.ADMIN_USERNAME,
+    configuredHash: env.ADMIN_PASSWORD_HASH,
+  });
+}
+
+export function createSuperAdminSession(username: string, password: string, request: Request) {
+  return createPrivilegedSession({
+    username, password, request, scope: 'superadmin',
+    configuredUsername: env.SUPER_ADMIN_USERNAME,
+    configuredHash: env.SUPER_ADMIN_PASSWORD_HASH,
+  });
+}
+
+export async function revokeAdminSession(sessionId: string, username: string, action = 'ADMIN_LOGOUT'): Promise<void> {
   await withTransaction(async (client) => {
     await client.query('UPDATE admin_sessions SET revoked_at = now() WHERE session_id = $1 AND revoked_at IS NULL', [sessionId]);
     await client.query(
       `INSERT INTO admin_audit_logs (admin_username, action, entity_type, entity_id)
-       VALUES ($1, 'ADMIN_LOGOUT', 'ADMIN_SESSION', $2)`,
-      [username, sessionId],
+       VALUES ($1, $2, 'ADMIN_SESSION', $3)`,
+      [username, action, sessionId],
     );
   });
 }

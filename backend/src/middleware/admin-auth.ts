@@ -1,9 +1,11 @@
 import { NextFunction, Request, Response } from 'express';
 import { query } from '../database/postgres';
 import { ApiError } from '../shared/api-error';
+import { env } from '../config/env';
 import { safeEqual, sha256 } from '../shared/crypto';
 
 export const ADMIN_SESSION_COOKIE = 'gac_admin_session';
+export const SUPER_ADMIN_SESSION_COOKIE = 'gac_superadmin_session';
 
 export interface AdminIdentity {
   username: string;
@@ -21,8 +23,16 @@ declare global {
 }
 
 export async function requireAdmin(request: Request, response: Response, next: NextFunction): Promise<void> {
+  return requirePrivilegedSession(ADMIN_SESSION_COOKIE, undefined, request, response, next);
+}
+
+export async function requireSuperAdmin(request: Request, response: Response, next: NextFunction): Promise<void> {
+  return requirePrivilegedSession(SUPER_ADMIN_SESSION_COOKIE, env.SUPER_ADMIN_USERNAME, request, response, next);
+}
+
+async function requirePrivilegedSession(cookieName: string, requiredUsername: string | undefined, request: Request, response: Response, next: NextFunction): Promise<void> {
   try {
-    const rawToken = request.cookies?.[ADMIN_SESSION_COOKIE] as string | undefined;
+    const rawToken = request.cookies?.[cookieName] as string | undefined;
     if (!rawToken) throw new ApiError(401, 'ADMIN_AUTH_REQUIRED', 'Admin authentication is required.');
 
     const result = await query<{
@@ -38,6 +48,9 @@ export async function requireAdmin(request: Request, response: Response, next: N
     );
     const session = result.rows[0];
     if (!session) throw new ApiError(401, 'ADMIN_SESSION_INVALID', 'The admin session is invalid or expired.');
+    if (requiredUsername && !safeEqual(session.admin_username.toLowerCase(), requiredUsername.toLowerCase())) {
+      throw new ApiError(403, 'SUPER_ADMIN_REQUIRED', 'Super-admin authorization is required.');
+    }
 
     response.locals.admin = {
       username: session.admin_username,

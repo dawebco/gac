@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { closePostgresPool, postgresPool } from '../database/postgres';
 import { createBookingInTransaction, voidBooking } from '../services/booking.service';
-import { adjustRewardPoints } from '../services/reward.service';
+import { requestRewardAdjustment, reviewRewardAdjustmentRequest } from '../services/reward.service';
 
 function assertEqual(actual: number | string, expected: number | string, label: string): void {
   if (actual !== expected) throw new Error(`${label}: received ${actual}; expected ${expected}`);
@@ -34,13 +34,21 @@ async function main(): Promise<void> {
     });
     assertEqual(booking.rewardPoints, 1000, 'Hotel reward calculation');
 
-    await adjustRewardPoints({
+    const creditRequest = await requestRewardAdjustment({
       phoneE164, direction: 'ADD', points: 200, reason: 'Rollback verification credit',
       adminUsername: 'verification', idempotencyKey: randomUUID(), audit,
     }, client);
-    await adjustRewardPoints({
+    await reviewRewardAdjustmentRequest({
+      requestId: creditRequest.requestId, decision: 'APPROVE',
+      superAdminUsername: 'verification-superadmin', audit,
+    }, client);
+    const debitRequest = await requestRewardAdjustment({
       phoneE164, direction: 'REMOVE', points: 50, reason: 'Rollback verification debit',
       adminUsername: 'verification', idempotencyKey: randomUUID(), audit,
+    }, client);
+    await reviewRewardAdjustmentRequest({
+      requestId: debitRequest.requestId, decision: 'APPROVE',
+      superAdminUsername: 'verification-superadmin', audit,
     }, client);
     await voidBooking({
       phoneE164, bookingId: booking.id, reason: 'Rollback verification reversal',
@@ -62,7 +70,7 @@ async function main(): Promise<void> {
     console.log(JSON.stringify({
       bookingAward: 'verified',
       bookingVoidAndReversal: 'verified',
-      manualCreditAndDebit: 'verified',
+      fourEyesRewardApproval: 'verified',
       unifiedDashboardSummary: 'verified',
       persistedVerificationData: false,
     }, null, 2));

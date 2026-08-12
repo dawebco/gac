@@ -13,7 +13,7 @@ import {
   listAdminCustomers,
   type AuditContext,
 } from '../services/customer.service';
-import { adjustRewardPoints, getUnifiedDashboard } from '../services/reward.service';
+import { getUnifiedDashboard, requestRewardAdjustment } from '../services/reward.service';
 import { listRewards, updateReward } from '../services/reward-catalog.service';
 import { ApiError } from '../shared/api-error';
 
@@ -154,7 +154,7 @@ adminRouter.delete('/customers/:phone/bookings/:bookingId', requireCsrf, async (
 adminRouter.post('/customers/:phone/reward-adjustments', requireCsrf, async (request, response) => {
   const phoneE164 = normalizeIndianPhone(String(request.params.phone));
   const input = adjustmentSchema.parse(request.body);
-  const data = await adjustRewardPoints({
+  const data = await requestRewardAdjustment({
     ...input,
     phoneE164,
     adminUsername: response.locals.admin!.username,
