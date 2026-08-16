@@ -10,6 +10,7 @@ import { env } from '../config/env';
 import { query } from '../database/postgres';
 import { listBookings } from '../services/booking.service';
 import { listRewards } from '../services/reward-catalog.service';
+import { requestRedemption } from '../services/reward-redemption.service';
 
 const registrationSchema = z.object({
   phone: z.string().trim().min(10).max(20),
@@ -37,6 +38,36 @@ function setCustomerSessionCookie(response: Response, sessionToken: string): voi
 
 portalRouter.get('/rewards', async (_request, response) => {
   response.status(200).json({ data: await listRewards() });
+});
+
+/**
+ * POST /portal/rewards/redeem
+ * Customer requests to redeem a reward.
+ */
+portalRouter.post('/rewards/redeem', requireCustomer, async (req, res, next) => {
+  try {
+    const { rewardId } = req.body;
+    const idempotencyKey = req.get('Idempotency-Key');
+    if (!rewardId || typeof rewardId !== 'string') {
+      throw new ApiError(400, 'BAD_REQUEST', 'Missing or invalid rewardId.');
+    }
+    if (!idempotencyKey) {
+      throw new ApiError(400, 'BAD_REQUEST', 'Idempotency-Key header is required.');
+    }
+
+    await requestRedemption({
+      phone: res.locals.customer!.phoneE164,
+      rewardId,
+      idempotencyKey,
+    });
+
+    res.status(202).json({ ok: true, data: { message: 'Redemption request submitted for approval.' } });
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'DUPLICATE_REQUEST') {
+      return res.status(200).json({ ok: true, data: { message: 'Redemption request already submitted.' } });
+    }
+    next(error);
+  }
 });
 
 portalRouter.post('/customers/register', async (request, response) => {

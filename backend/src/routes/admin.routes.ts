@@ -15,6 +15,7 @@ import {
 } from '../services/customer.service';
 import { getUnifiedDashboard, requestRewardAdjustment } from '../services/reward.service';
 import { createReward, deleteReward, listRewards, updateReward } from '../services/reward-catalog.service';
+import { listPendingRedemptionRequests, reviewRedemptionRequest } from '../services/reward-redemption.service';
 import { ApiError } from '../shared/api-error';
 
 const bookingTypeSchema = z.enum(['FLIGHTS', 'HOTELS', 'HOLIDAYS']);
@@ -77,6 +78,36 @@ adminRouter.get('/overview', async (_request, response) => {
 
 adminRouter.get('/rewards', async (_request, response) => {
   response.status(200).json({ data: await listRewards() });
+});
+
+/**
+ * GET /admin/redemption-requests
+ * Admin lists all pending redemption requests.
+ */
+adminRouter.get('/redemption-requests', async (_req, res, next) => {
+  try {
+    const requests = await listPendingRedemptionRequests();
+    res.json({ ok: true, data: requests });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/redemption-requests/:requestId/review
+ * Admin approves or rejects a redemption request.
+ */
+adminRouter.post('/redemption-requests/:requestId/review', requireCsrf, async (req, res, next) => {
+  try {
+    const { decision, reviewNote } = req.body;
+    if (decision !== 'APPROVE' && decision !== 'REJECT') {
+      throw new ApiError(400, 'BAD_REQUEST', 'Decision must be APPROVE or REJECT.');
+    }
+    const result = await reviewRedemptionRequest({ requestId: z.string().uuid().parse(req.params.requestId), decision, reviewNote, audit: auditContext(req) });
+    res.json({ ok: true, data: result });
+  } catch (error) {
+    next(error);
+  }
 });
 
 adminRouter.post('/rewards', requireCsrf, rewardImageUpload.single('image'), async (request, response) => {
