@@ -101,6 +101,10 @@ function Dashboard({ customer, onLogout, onRefresh }) {
     totalPointsRedeemed: 600,
   };
   useEffect(() => {
+    setMyRedeemedRewards(customer.redeemedRewards || []);
+  }, [customer.redeemedRewards]);
+
+  useEffect(() => {
     if (toast) { const timer = setTimeout(() => setToast(''), 4000); return () => clearTimeout(timer); }
     if (!onRefresh) return undefined;
     let refreshInFlight = false;
@@ -126,7 +130,7 @@ function Dashboard({ customer, onLogout, onRefresh }) {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [onRefresh]);
+  }, [onRefresh, toast]);
   useEffect(() => {
     setRewardCatalog(customer.rewards || []);
   }, [customer.rewards]);
@@ -149,7 +153,7 @@ function Dashboard({ customer, onLogout, onRefresh }) {
     } catch (error) {
       notify(error.message || 'Failed to send redemption request.', 'error');
     }
-  }, [summary.availablePoints, pendingRedemptions]);
+  }, [summary.availablePoints, pendingRedemptions, notify]);
 
   const allRewards = (rewardCatalog.length ? rewardCatalog : rewards.map((r, i) => ({ id: `FEAT_${i}`, category: 'FEATURED', imageUrl: r[0], title: r[1], description: r[2], pointsRequired: parseInt(r[3].replace(/[^0-9]/g, ''), 10) }))
     .concat(milestones.map((m, i) => ({ id: `MILE_${i}`, category: 'MILESTONE', pointsRequired: parseInt(m[0].replace(/,/g, '')), title: m[1], description: m[2], imageUrl: milestoneImages[i] })))
@@ -380,7 +384,7 @@ function AdminDashboard({ onLogout }) {
       setDataError(error.message || 'Unable to load admin data.');
       return [];
     }
-  }, []);
+  }, [redemptionRequests.length]);
   useEffect(() => {
     refreshData();
     let refreshInFlight = false;
@@ -464,7 +468,7 @@ function AdminDashboard({ onLogout }) {
       <button type="button" className="admin-sidebar-logout" onClick={onLogout}><LogOut size={19}/><span>Logout</span></button>
     </aside>
     <main className="admin-main">
-      <header className="admin-workspace-header"><div><h1>{sectionCopy[section][0]}</h1><p>{sectionCopy[section][1]}</p></div><div className="admin-profile-wrap"><button className="admin-profile" onClick={() => setProfileOpen(value => !value)} aria-expanded={profileOpen}><i><User size={18}/></i><span><b>Admin</b><small>ADMINISTRATOR</small></span><ChevronDown size={16}/></button>{profileOpen && <div className="admin-profile-menu"><button onClick={onLogout}><LogOut size={15}/>Log out</button></div>}</div></header>
+      <header className="admin-workspace-header"><div><h1>{sectionCopy[section][0]}</h1><p>{sectionCopy[section][1]}</p></div><div className="admin-profile-wrap"><button className="admin-notification-btn" onClick={() => setNotificationsOpen(v => !v)} aria-expanded={notificationsOpen}><Bell size={19}/>{redemptionRequests.length > 0 && <span className="admin-notification-badge">{redemptionRequests.length}</span>}</button>{notificationsOpen && <AdminRedemptionRequests requests={redemptionRequests} onReview={handleRedemptionReview} />}<button className="admin-profile" onClick={() => setProfileOpen(value => !value)} aria-expanded={profileOpen}><i><User size={18}/></i><span><b>Admin</b><small>ADMINISTRATOR</small></span><ChevronDown size={16}/></button>{profileOpen && <div className="admin-profile-menu"><button onClick={onLogout}><LogOut size={15}/>Log out</button></div>}</div></header>
       {dataError && <div className="admin-login-error" role="alert"><AlertCircle size={15}/>{dataError}</div>}
       {section === 'dashboard' && <>
         <section className="admin-kpis" aria-label="Summary metrics">{metrics.map(([Icon, label, value, tone]) => <article className="admin-kpi" key={label}><i className={tone}><Icon size={21}/></i><div><small>{label}</small><strong>{value}</strong></div></article>)}</section>
