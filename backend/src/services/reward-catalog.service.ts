@@ -135,8 +135,8 @@ export async function createReward(input: {
 
 export async function updateReward(input: {
   rewardId: string;
-  title: string;
-  description: string;
+  title?: string; // Made optional
+  description?: string; // Made optional
   pointsRequired?: number;
   image?: Express.Multer.File;
   audit: AuditContext;
@@ -147,6 +147,12 @@ export async function updateReward(input: {
   );
   const existing = existingResult.rows[0];
   if (!existing) throw new ApiError(404, 'REWARD_NOT_FOUND', 'Reward card not found.');
+
+  const nextTitle = input.title !== undefined ? input.title.trim() : existing.title;
+  const nextDescription = input.description !== undefined ? input.description.trim() : existing.description;
+  if (nextTitle.length < 2 || nextDescription.length < 3) {
+    throw new ApiError(400, 'INVALID_REWARD_DETAILS', 'Reward title and description are required.');
+  }
 
   const nextPointsRequired = input.pointsRequired !== undefined ? Number(input.pointsRequired) : Number(existing.points_required);
   if (!Number.isInteger(nextPointsRequired) || nextPointsRequired <= 0) {
@@ -182,7 +188,7 @@ export async function updateReward(input: {
              image_storage_path = coalesce($5, image_storage_path), updated_by = $6
          WHERE reward_id = $7
          RETURNING ${rewardColumns}`,
-        [input.title.trim(), input.description.trim(), nextPointsRequired, imageUrl, newStoragePath, input.audit.adminUsername, input.rewardId],
+        [nextTitle, nextDescription, nextPointsRequired, imageUrl, newStoragePath, input.audit.adminUsername, input.rewardId],
       );
       await writeAdminAudit(client, {
         ...input.audit,
