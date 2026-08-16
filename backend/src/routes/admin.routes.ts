@@ -14,7 +14,7 @@ import {
   type AuditContext,
 } from '../services/customer.service';
 import { getUnifiedDashboard, requestRewardAdjustment } from '../services/reward.service';
-import { listRewards, updateReward } from '../services/reward-catalog.service';
+import { createReward, deleteReward, listRewards, updateReward } from '../services/reward-catalog.service';
 import { ApiError } from '../shared/api-error';
 
 const bookingTypeSchema = z.enum(['FLIGHTS', 'HOTELS', 'HOLIDAYS']);
@@ -38,10 +38,15 @@ const adjustmentSchema = z.object({
 const voidSchema = z.object({
   reason: z.string().trim().min(3).max(500).default('Booking removed by administrator'),
 });
-const rewardUpdateSchema = z.object({
+const rewardBaseSchema = z.object({
   title: z.string().trim().min(2).max(200),
   description: z.string().trim().min(3).max(2000),
+  pointsRequired: z.coerce.number().int().positive().max(100_000_000),
 });
+const rewardCreateSchema = rewardBaseSchema.extend({
+  category: z.enum(['FEATURED', 'MILESTONE']),
+});
+const rewardUpdateSchema = rewardBaseSchema.partial();
 const rewardImageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024, files: 1 },
@@ -74,6 +79,16 @@ adminRouter.get('/rewards', async (_request, response) => {
   response.status(200).json({ data: await listRewards() });
 });
 
+adminRouter.post('/rewards', requireCsrf, rewardImageUpload.single('image'), async (request, response) => {
+  const input = rewardCreateSchema.parse(request.body);
+  const data = await createReward({
+    ...input,
+    image: request.file,
+    audit: auditContext(request),
+  });
+  response.status(201).json({ data });
+});
+
 adminRouter.patch('/rewards/:rewardId', requireCsrf, rewardImageUpload.single('image'), async (request, response) => {
   const rewardId = z.string().uuid().parse(request.params.rewardId);
   const input = rewardUpdateSchema.parse(request.body);
@@ -83,6 +98,12 @@ adminRouter.patch('/rewards/:rewardId', requireCsrf, rewardImageUpload.single('i
     image: request.file,
     audit: auditContext(request),
   });
+  response.status(200).json({ data });
+});
+
+adminRouter.delete('/rewards/:rewardId', requireCsrf, async (request, response) => {
+  const rewardId = z.string().uuid().parse(request.params.rewardId);
+  const data = await deleteReward({ rewardId, audit: auditContext(request) });
   response.status(200).json({ data });
 });
 

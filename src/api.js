@@ -83,12 +83,25 @@ export const adminApi = {
   },
   overview: () => apiRequest('/admin/overview'),
   rewards: () => apiRequest('/admin/rewards'),
-  updateReward(rewardId, { title, description, image }) {
+  createReward({ title, description, pointsRequired, category, image }) {
     const form = new FormData();
     form.append('title', title);
     form.append('description', description);
+    form.append('pointsRequired', String(pointsRequired));
+    form.append('category', category);
+    if (image) form.append('image', image);
+    return adminMutation('/admin/rewards', { method: 'POST', body: form });
+  },
+  updateReward(rewardId, { title, description, pointsRequired, image }) {
+    const form = new FormData();
+    form.append('title', title);
+    form.append('description', description);
+    if (pointsRequired !== undefined) form.append('pointsRequired', String(pointsRequired));
     if (image) form.append('image', image);
     return adminMutation(`/admin/rewards/${rewardId}`, { method: 'PATCH', body: form });
+  },
+  deleteReward(rewardId) {
+    return adminMutation(`/admin/rewards/${rewardId}`, { method: 'DELETE' });
   },
   async customers(search = '') {
     const rows = await apiRequest(`/admin/customers?search=${encodeURIComponent(search)}&limit=250`);

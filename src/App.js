@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AlertCircle, Award, Briefcase, Calendar, CheckCircle2, ChevronDown, Download,
-  ChevronRight, CircleDollarSign, Eye, EyeOff, Gift, History,
+  AlertCircle, Award, Bell, Briefcase, Calendar, CheckCircle2, ChevronDown, Download,
+  ChevronRight, CircleDollarSign, Eye, EyeOff, Gift, History, Check,
   ImagePlus, LayoutDashboard, Lock, LogOut, Mail, MapPin, Menu, Minus, Phone, Plus,
   Save, Search, ShieldCheck, Star, Trash2, User, UserRound, Users, WalletCards, X
 } from 'lucide-react';
@@ -82,6 +82,12 @@ function Dashboard({ customer, onLogout, onRefresh }) {
   const [view, setView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rewardCatalog, setRewardCatalog] = useState(customer.rewards || []);
+  const [myRedeemedRewards, setMyRedeemedRewards] = useState(customer.redeemedRewards || []);
+  const [pendingRedemptions, setPendingRedemptions] = useState(customer.pendingRedemptions || []);
+  const [toast, setToast] = useState('');
+  const [toastType, setToastType] = useState('success');
+  const notify = (message, type = 'success') => { setToast(message); setToastType(type); };
+
   const nav = [
     [LayoutDashboard, 'Dashboard', 'dashboard'], [Gift, 'Rewards', 'rewards'],
     [History, 'Purchase History', 'history'], [UserRound, 'Profile', 'profile'],
@@ -95,6 +101,7 @@ function Dashboard({ customer, onLogout, onRefresh }) {
     totalPointsRedeemed: 600,
   };
   useEffect(() => {
+    if (toast) { const timer = setTimeout(() => setToast(''), 4000); return () => clearTimeout(timer); }
     if (!onRefresh) return undefined;
     let refreshInFlight = false;
     const refresh = async () => {
@@ -123,14 +130,40 @@ function Dashboard({ customer, onLogout, onRefresh }) {
   useEffect(() => {
     setRewardCatalog(customer.rewards || []);
   }, [customer.rewards]);
-  const featuredRewards = rewardCatalog.length ? rewardCatalog.filter(reward => reward.category === 'FEATURED').map(reward => [rewardImage(reward), reward.title, reward.description, `${reward.pointsRequired.toLocaleString('en-IN')} PTS`]) : rewards;
-  const milestoneRewards = rewardCatalog.length ? rewardCatalog.filter(reward => reward.category === 'MILESTONE').map(reward => [reward.pointsRequired.toLocaleString('en-IN'), reward.title, reward.description, rewardImage(reward)]) : milestones.map((reward, index) => [...reward, milestoneImages[index]]);
+
+  const handleRedeem = useCallback(async (reward) => {
+    if (summary.availablePoints < reward.pointsRequired) {
+      notify('You do not have enough points to redeem this reward.', 'error');
+      return;
+    }
+    if (pendingRedemptions.some(r => r.rewardId === reward.id)) {
+      notify('You have already requested this reward.', 'error');
+      return;
+    }
+    try {
+      // This would be an API call in a real application
+      // await portalApi.requestRedemption(reward.id);
+      const newPending = { rewardId: reward.id, rewardTitle: reward.title, points: reward.pointsRequired, requestedAt: new Date().toISOString() };
+      setPendingRedemptions(current => [...current, newPending]);
+      notify('Redemption request sent to admin for approval.', 'success');
+    } catch (error) {
+      notify(error.message || 'Failed to send redemption request.', 'error');
+    }
+  }, [summary.availablePoints, pendingRedemptions]);
+
+  const allRewards = (rewardCatalog.length ? rewardCatalog : rewards.map((r, i) => ({ id: `FEAT_${i}`, category: 'FEATURED', imageUrl: r[0], title: r[1], description: r[2], pointsRequired: parseInt(r[3].replace(/[^0-9]/g, ''), 10) }))
+    .concat(milestones.map((m, i) => ({ id: `MILE_${i}`, category: 'MILESTONE', pointsRequired: parseInt(m[0].replace(/,/g, '')), title: m[1], description: m[2], imageUrl: milestoneImages[i] })))
+  ).map(r => ({ ...r, image: rewardImage(r) }));
+
+  const featuredRewards = allRewards.filter(r => r.category === 'FEATURED');
+  const milestoneRewards = allRewards.filter(r => r.category === 'MILESTONE');
+
   const viewTitles = {
     history: ['Purchase History', 'Review points earned across your completed GAC Holidays journeys.'],
     rewards: ['Reward Milestones', 'Unlock more memorable rewards as your points balance grows.'],
     profile: ['My Profile', 'Manage your GAC Journey Rewards customer account.'],
   };
-  return <div className="dashboard-shell">
+  return <div className="dashboard-shell">{toast && <div className={`toast-notification ${toastType}`}>{toastType === 'error' ? <AlertCircle size={18}/> : <CheckCircle2 size={18}/>}<span>{toast}</span></div>}
     <div className="mobile-topbar">
       <img className="mobile-brand-logo" src={logoImg} alt="GAC Holidays"/>
       <div>
@@ -156,11 +189,11 @@ function Dashboard({ customer, onLogout, onRefresh }) {
       </section>
       <section className="dashboard-rewards">
         <div className="dashboard-rewards-title"><h2>Available Rewards</h2><button onClick={() => setView('rewards')}>View All Rewards <span>→</span></button></div>
-        <div className="reward-card-grid">{featuredRewards.map(reward => <RewardCard key={reward[1]} reward={reward}/>)}</div>
+        <div className="reward-card-grid">{featuredRewards.map(reward => <RewardCard key={reward.id} reward={reward} onRedeem={handleRedeem} availablePoints={summary.availablePoints} pendingRedemptions={pendingRedemptions} />)}</div>
       </section>
       </>}
       {view === 'history' && <section className="focused-view"><PurchaseHistory bookings={customer.bookingItems}/></section>}
-      {view === 'rewards' && <section className="focused-view"><RewardsContent rewardItems={milestoneRewards}/></section>}
+      {view === 'rewards' && <section className="focused-view"><RewardsContent rewardItems={milestoneRewards} redeemedItems={myRedeemedRewards} onRedeem={handleRedeem} availablePoints={summary.availablePoints} pendingRedemptions={pendingRedemptions} /></section>}
       {view === 'profile' && <Profile customer={customer}/>}
     </main>
   </div>;
@@ -176,19 +209,31 @@ function PurchaseHistory({ bookings }) {
   return <article className="panel history-panel"><div className="purchase-table"><div className="purchase-head"><span>DATE</span><span>DESCRIPTION</span><span>AMOUNT</span><span>PTS EARNED</span></div>{rows.map(row => <div className="purchase-row" key={`${row[0]}-${row[1]}`}>{row.map((cell, i) => <span key={`${cell}-${i}`} data-label={['Date','Description','Amount','Points'][i]}>{cell}</span>)}</div>)}{!rows.length && <div className="admin-empty"><Calendar size={20}/><span>No bookings are available yet.</span></div>}</div><div className="panel-note"><AlertCircle size={14}/> Points are credited after the completion of the trip.</div></article>;
 }
 
-function RewardsContent({ includeEarning = false, rewardItems = milestones.map((reward, index) => [...reward, milestoneImages[index]]) }) {
+function RewardsContent({ includeEarning = false, rewardItems, redeemedItems = [], onRedeem, availablePoints, pendingRedemptions }) {
   return <section className="journey-rewards">
         {includeEarning && <>
         <div className="rewards-heading"><div><span>GAC JOURNEY REWARDS</span><h2>Book. Earn. Experience.</h2><p>Every eligible booking takes you closer to your next reward.</p></div><Gift size={32}/></div>
         <div className="earning-section"><div className="section-heading"><small>HOW IT WORKS</small><h2>Points Earning</h2></div><div className="earning-rules">{earningRules.map(([name, spend, points]) => <article key={name}><i><CircleDollarSign size={22}/></i><div><h3>{name}</h3><p><b>{spend}</b> spent earns <strong>{points}</strong></p></div></article>)}</div></div>
         </>}
-        <div className="milestones-section"><div className="milestone-grid">{rewardItems.map(([points, title, description, image]) => <article className="milestone-card" key={`${points}-${title}`}><div className="reward-placeholder"><img src={image} alt={title}/></div><div className="milestone-copy"><span className="milestone-number">{points} PTS</span><h3>{title}</h3><p>{description}</p></div></article>)}</div></div>
+        {redeemedItems.length > 0 && <div className="milestones-section">
+          <div className="section-heading"><h2>My Rewards</h2><p>Your collection of unlocked and redeemed rewards.</p></div>
+          <div className="milestone-grid">{redeemedItems.map(reward => <article className="milestone-card redeemed" key={reward.id}><div className="reward-placeholder"><img src={reward.image} alt={reward.title}/></div><div className="milestone-copy"><span className="milestone-number redeemed-tag"><Check size={12}/>REDEEMED</span><h3>{reward.title}</h3><p>{reward.description}</p></div></article>)}</div>
+        </div>}
+        <div className="milestones-section"><div className="milestone-grid">{rewardItems.map(reward => {
+          const isPending = pendingRedemptions.some(p => p.rewardId === reward.id);
+          const canRedeem = availablePoints >= reward.pointsRequired;
+          return <article className="milestone-card" key={reward.id}><div className="reward-placeholder"><img src={reward.image} alt={reward.title}/></div><div className="milestone-copy"><span className="milestone-number">{reward.pointsRequired.toLocaleString('en-IN')} PTS</span><h3>{reward.title}</h3><p>{reward.description}</p><button className="milestone-redeem-btn" onClick={() => onRedeem(reward)} disabled={isPending || !canRedeem}>{isPending ? 'Request Sent' : (canRedeem ? 'Redeem' : 'Get More Points')}</button></div></article>;
+        })}</div></div>
         <div className="rewards-terms"><AlertCircle size={18}/><p><b>Reward terms:</b> Rewards are subject to availability and applicable terms. Flight benefits, hotel stays and travel experiences depend on partner availability. The brand, model, specifications and colour of merchandise will be decided by GAC Holidays at the time of redemption.</p></div>
       </section>;
 }
 
-function RewardCard({ reward: [image, title, description, points] }) {
-  return <article className="reward-card"><div className="reward-card-image"><img src={image} alt=""/><strong>{points}</strong></div><div className="reward-card-copy"><h3>{title}</h3><p>{description}</p><small><Calendar size={13}/> Valid till 31 Dec 2026</small><button>Redeem Now <span>→</span></button></div></article>;
+function RewardCard({ reward, onRedeem, availablePoints, pendingRedemptions }) {
+  const { image, title, description, pointsRequired, id } = reward;
+  const isPending = pendingRedemptions.some(p => p.rewardId === id);
+  const canRedeem = availablePoints >= pointsRequired;
+
+  return <article className="reward-card"><div className="reward-card-image"><img src={image} alt=""/><strong>{pointsRequired.toLocaleString('en-IN')} PTS</strong></div><div className="reward-card-copy"><h3>{title}</h3><p>{description}</p><small><Calendar size={13}/> Valid till 31 Dec 2026</small><button onClick={() => onRedeem(reward)} disabled={isPending || !canRedeem}>{isPending ? 'Request Sent' : (canRedeem ? 'Redeem Now' : 'Insufficent Points')} <span>→</span></button></div></article>;
 }
 
 function Profile({ customer }) {
@@ -314,6 +359,8 @@ function AdminDashboard({ onLogout }) {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [dataError, setDataError] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [redemptionRequests, setRedemptionRequests] = useState([]);
   const refreshData = useCallback(async () => {
     try {
       const [nextCustomers, nextOverview, nextRewards] = await Promise.all([adminApi.customers(), adminApi.overview(), adminApi.rewards()]);
@@ -321,6 +368,13 @@ function AdminDashboard({ onLogout }) {
       setOverview(nextOverview);
       setAdminRewards(nextRewards);
       setDataError('');
+      // Mocked redemption requests
+      if (!redemptionRequests.length && nextCustomers.length > 1) {
+        setRedemptionRequests([
+          { id: 'req1', customerName: nextCustomers[0].name, phone: nextCustomers[0].phone, rewardName: 'Beach Resort Voucher', points: 500 },
+          { id: 'req2', customerName: nextCustomers[1].name, phone: nextCustomers[1].phone, rewardName: 'Free Travel Accessories Kit', points: 750 },
+        ]);
+      }
       return nextCustomers;
     } catch (error) {
       setDataError(error.message || 'Unable to load admin data.');
@@ -388,6 +442,18 @@ function AdminDashboard({ onLogout }) {
     goTo('customers');
     openCustomer(customer);
   };
+  const handleRedemptionReview = async (requestId, decision) => {
+    // In a real app, this would call an API:
+    // await adminApi.reviewRedemption(requestId, decision);
+    setRedemptionRequests(current => current.filter(req => req.id !== requestId));
+    if (decision === 'APPROVE') {
+      // You might want to show a success message
+      console.log(`Approved request ${requestId}`);
+    } else {
+      console.log(`Rejected request ${requestId}`);
+    }
+    await refreshData();
+  };
 
   return <div className="admin-shell">
     <header className="admin-mobile-bar"><img src={logoImg} alt="GAC Holidays"/><button type="button" onClick={() => setSidebarOpen(true)} aria-label="Open admin menu"><Menu size={27}/></button></header>
@@ -411,6 +477,22 @@ function AdminDashboard({ onLogout }) {
       <aside className="admin-info"><b>i</b><span>Reward points are calculated automatically based on the company's criteria and updated in the system.</span></aside>
     </main>
     {selectedCustomer && <AdminCustomerManager customer={selectedCustomer} onRefresh={async () => { const refreshed = await adminApi.customer(selectedCustomer.phone); setSelectedCustomer(refreshed); await refreshData(); return refreshed; }} onClose={() => setSelectedCustomer(null)}/>} 
+  </div>;
+}
+
+function AdminRedemptionRequests({ requests, onReview }) {
+  if (!requests || requests.length === 0) {
+    return <div className="admin-notifications-panel empty"><Bell size={20}/><span>No pending requests</span></div>;
+  }
+  return <div className="admin-notifications-panel">
+    <header><h3>Redemption Requests</h3></header>
+    <ul>{requests.map(req => <li key={req.id}>
+      <div className="req-info"><strong>{req.customerName}</strong><small>+91 {req.phone}</small><span>{req.rewardName} ({req.points} PTS)</span></div>
+      <div className="req-actions">
+        <button className="approve" onClick={() => onReview(req.id, 'APPROVE')}>Approve</button>
+        <button className="reject" onClick={() => onReview(req.id, 'REJECT')}>Reject</button>
+      </div>
+    </li>)}</ul>
   </div>;
 }
 
@@ -565,10 +647,29 @@ function WhatsAppIcon() {
 }
 
 function AdminRewardsPanel({ rewards: rewardItems, onSaved }) {
+  const [creating, setCreating] = useState(false);
   const featured = rewardItems.filter(reward => reward.category === 'FEATURED');
   const milestonesList = rewardItems.filter(reward => reward.category === 'MILESTONE');
+
+  const addRewardCard = async () => {
+    setCreating(true);
+    try {
+      const created = await adminApi.createReward({
+        title: 'New Reward',
+        description: 'Description for this reward card.',
+        pointsRequired: 500,
+        category: 'FEATURED',
+      });
+      onSaved(created);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return <section className="admin-rewards-manager">
-    <header className="admin-rewards-intro"><i><Gift size={22}/></i><div><h2>Customer Reward Catalog</h2><p>Upload a clearer image or edit the card copy. Saved changes appear on every customer dashboard.</p></div></header>
+    <header className="admin-rewards-intro"><i><Gift size={22}/></i><div><h2>Customer Reward Catalog</h2><p>Upload a clearer image or edit the card copy and points. Saved changes appear on every customer dashboard.</p></div><button type="button" className="admin-primary-action" onClick={addRewardCard} disabled={creating}><Plus size={16}/>{creating ? 'Adding…' : 'Add reward card'}</button></header>
     {[['Available Rewards', featured], ['Reward Milestones', milestonesList]].map(([heading, items]) => <section className="admin-reward-group" key={heading}><h3>{heading}</h3><div className="admin-reward-editor-grid">{items.map(reward => <AdminRewardEditor key={reward.id} reward={reward} onSaved={onSaved}/>)}</div></section>)}
   </section>;
 }
@@ -576,12 +677,14 @@ function AdminRewardsPanel({ rewards: rewardItems, onSaved }) {
 function AdminRewardEditor({ reward, onSaved }) {
   const [title, setTitle] = useState(reward.title);
   const [description, setDescription] = useState(reward.description);
+  const [pointsRequired, setPointsRequired] = useState(String(reward.pointsRequired));
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState('');
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const fileRef = useRef(null);
-  useEffect(() => { setTitle(reward.title); setDescription(reward.description); }, [reward.title, reward.description]);
+  useEffect(() => { setTitle(reward.title); setDescription(reward.description); setPointsRequired(String(reward.pointsRequired)); }, [reward.title, reward.description, reward.pointsRequired]);
   useEffect(() => {
     if (!image) { setPreview(''); return undefined; }
     const objectUrl = URL.createObjectURL(image);
@@ -591,10 +694,12 @@ function AdminRewardEditor({ reward, onSaved }) {
   const save = async event => {
     event.preventDefault();
     if (title.trim().length < 2 || description.trim().length < 3) { setMessage('Enter a title and description.'); return; }
+    const points = Number(pointsRequired);
+    if (!Number.isInteger(points) || points <= 0) { setMessage('Points must be a positive number.'); return; }
     setSaving(true);
     setMessage('');
     try {
-      const updated = await adminApi.updateReward(reward.id, { title: title.trim(), description: description.trim(), image });
+      const updated = await adminApi.updateReward(reward.id, { title: title.trim(), description: description.trim(), pointsRequired: points, image });
       onSaved(updated);
       setImage(null);
       setMessage('Saved successfully.');
@@ -604,9 +709,26 @@ function AdminRewardEditor({ reward, onSaved }) {
       setSaving(false);
     }
   };
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      const deleted = await adminApi.deleteReward(reward.id);
+      onSaved(deleted);
+    } catch (error) {
+      setMessage(error.message || 'Unable to remove this reward.');
+    } finally {
+      setDeleting(false);
+    }
+  };
   return <form className="admin-reward-editor" onSubmit={save}>
     <div className="admin-reward-image"><img src={preview || rewardImage(reward)} alt={title}/><button type="button" onClick={() => fileRef.current?.click()}><ImagePlus size={17}/>Change photo</button><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={event => { const file = event.target.files?.[0] || null; if (file && file.size > 8 * 1024 * 1024) { setMessage('Choose an image smaller than 8 MB.'); event.target.value = ''; return; } setImage(file); setMessage(''); }}/></div>
-    <div className="admin-reward-editor-copy"><span>{reward.pointsRequired.toLocaleString('en-IN')} PTS</span><label>Reward title<input value={title} onChange={event => setTitle(event.target.value)} maxLength="200"/></label><label>Description<textarea value={description} onChange={event => setDescription(event.target.value)} maxLength="2000" rows="3"/></label><button type="submit" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : 'Save Changes'}</button>{message && <small className={message.startsWith('Saved') ? 'success' : ''}>{message}</small>}</div>
+    <div className="admin-reward-editor-copy">
+      <label>Points<input type="number" min="1" step="1" value={pointsRequired} onChange={event => setPointsRequired(event.target.value)} /></label>
+      <label>Reward title<input value={title} onChange={event => setTitle(event.target.value)} maxLength="200"/></label>
+      <label>Description<textarea value={description} onChange={event => setDescription(event.target.value)} maxLength="2000" rows="3"/></label>
+      <div className="admin-reward-actions"><button type="submit" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : 'Save Changes'}</button><button type="button" className="admin-secondary-action danger" onClick={remove} disabled={deleting}><Trash2 size={16}/>{deleting ? 'Removing…' : 'Remove'}</button></div>
+      {message && <small className={message.startsWith('Saved') ? 'success' : ''}>{message}</small>}
+    </div>
   </form>;
 }
 
