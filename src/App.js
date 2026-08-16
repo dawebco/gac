@@ -193,11 +193,11 @@ function Dashboard({ customer, onLogout, onRefresh }) {
       </section>
       <section className="dashboard-rewards">
         <div className="dashboard-rewards-title"><h2>Available Rewards</h2><button onClick={() => setView('rewards')}>View All Rewards <span>→</span></button></div>
-        <div className="reward-card-grid">{featuredRewards.map(reward => <RewardCard key={reward.id} reward={reward} onRedeem={handleRedeem} availablePoints={summary.availablePoints} pendingRedemptions={pendingRedemptions} />)}</div>
+        <div className="reward-card-grid">{featuredRewards.map(reward => <RewardCard key={reward.id} reward={reward} onRedeem={handleRedeem} />)}</div>
       </section>
       </>}
       {view === 'history' && <section className="focused-view"><PurchaseHistory bookings={customer.bookingItems}/></section>}
-      {view === 'rewards' && <section className="focused-view"><RewardsContent rewardItems={milestoneRewards} redeemedItems={myRedeemedRewards} onRedeem={handleRedeem} availablePoints={summary.availablePoints} pendingRedemptions={pendingRedemptions} /></section>}
+      {view === 'rewards' && <section className="focused-view"><RewardsContent rewardItems={milestoneRewards} redeemedItems={myRedeemedRewards} onRedeem={handleRedeem} /></section>}
       {view === 'profile' && <Profile customer={customer}/>}
     </main>
   </div>;
@@ -213,7 +213,7 @@ function PurchaseHistory({ bookings }) {
   return <article className="panel history-panel"><div className="purchase-table"><div className="purchase-head"><span>DATE</span><span>DESCRIPTION</span><span>AMOUNT</span><span>PTS EARNED</span></div>{rows.map(row => <div className="purchase-row" key={`${row[0]}-${row[1]}`}>{row.map((cell, i) => <span key={`${cell}-${i}`} data-label={['Date','Description','Amount','Points'][i]}>{cell}</span>)}</div>)}{!rows.length && <div className="admin-empty"><Calendar size={20}/><span>No bookings are available yet.</span></div>}</div><div className="panel-note"><AlertCircle size={14}/> Points are credited after the completion of the trip.</div></article>;
 }
 
-function RewardsContent({ includeEarning = false, rewardItems, redeemedItems = [], onRedeem, availablePoints, pendingRedemptions }) {
+function RewardsContent({ includeEarning = false, rewardItems, redeemedItems = [], onRedeem }) {
   return <section className="journey-rewards">
         {includeEarning && <>
         <div className="rewards-heading"><div><span>GAC JOURNEY REWARDS</span><h2>Book. Earn. Experience.</h2><p>Every eligible booking takes you closer to your next reward.</p></div><Gift size={32}/></div>
@@ -228,8 +228,8 @@ function RewardsContent({ includeEarning = false, rewardItems, redeemedItems = [
       </section>;
 }
 
-function RewardCard({ reward, onRedeem, availablePoints, pendingRedemptions }) {
-  const { image, title, description, pointsRequired, id } = reward;
+function RewardCard({ reward, onRedeem }) {
+  const { image, title, description, pointsRequired } = reward;
   return <article className="reward-card"><div className="reward-card-image"><img src={image} alt=""/><strong>{pointsRequired.toLocaleString('en-IN')} PTS</strong></div><div className="reward-card-copy"><h3>{title}</h3><p>{description}</p><small><Calendar size={13}/> Valid till 31 Dec 2026</small><button onClick={() => onRedeem(reward)}>Redeem Now <span>→</span></button></div></article>;
 }
 
