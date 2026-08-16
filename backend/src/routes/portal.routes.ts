@@ -25,6 +25,7 @@ const dummyLoginSchema = z.object({
 export const portalRouter = Router();
 
 function setCustomerSessionCookie(response: Response, sessionToken: string): void {
+  // Customer portal sessions must be isolated from admin and super-admin cookies.
   response.cookie(CUSTOMER_SESSION_COOKIE, sessionToken, {
     httpOnly: true,
     secure: env.COOKIE_SECURE,

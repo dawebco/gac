@@ -117,6 +117,7 @@ export function createAdminSession(username: string, password: string, request: 
 }
 
 export function createSuperAdminSession(username: string, password: string, request: Request) {
+  // Validate against the super-admin credentials only; do not reuse the admin login path.
   return createPrivilegedSession({
     username, password, request, scope: 'superadmin',
     configuredUsername: env.SUPER_ADMIN_USERNAME,

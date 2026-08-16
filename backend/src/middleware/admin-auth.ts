@@ -27,6 +27,7 @@ export async function requireAdmin(request: Request, response: Response, next: N
 }
 
 export async function requireSuperAdmin(request: Request, response: Response, next: NextFunction): Promise<void> {
+  // Keep super-admin authorization strictly scoped to the super-admin session and username.
   return requirePrivilegedSession(SUPER_ADMIN_SESSION_COOKIE, env.SUPER_ADMIN_USERNAME, request, response, next);
 }
 
