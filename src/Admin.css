@@ -41,7 +41,12 @@
 .admin-workspace-header { min-height: 50px; display: flex; align-items: center; justify-content: space-between; }
 .admin-workspace-header h1 { margin: 0; font-size: 24px; line-height: 29px; }
 .admin-workspace-header p { margin: 4px 0 0; color: #64748b; font-size: 14px; }
-.admin-profile-wrap { position: relative; }
+.admin-profile-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .admin-profile { padding: 0; border: 0; background: transparent; color: #1e293b; display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .admin-profile > i { width: 36px; height: 36px; border-radius: 50%; background: #d1d6e0; color: #001735; display: grid; place-items: center; }
 .admin-profile > span { min-width: 78px; text-align: left; display: grid; gap: 2px; }
@@ -51,6 +56,81 @@
 .admin-profile-menu { position: absolute; z-index: 10; top: 44px; right: 0; width: 130px; padding: 6px; border: 1px solid #e2e7ee; border-radius: 9px; background: #fff; box-shadow: 0 12px 26px rgba(15,23,42,.13); }
 .admin-profile-menu button { width: 100%; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: #1e293b; display: flex; align-items: center; gap: 8px; font: 600 12px Inter, Arial; cursor: pointer; }
 .admin-profile-menu button:hover { background: #f1f5f9; }
+
+.admin-notification-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #dce3ec;
+  background: #fff;
+  color: #64748b;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background .2s, color .2s;
+}
+
+.admin-notification-btn:hover,
+.admin-notification-btn[aria-expanded="true"] {
+  background: var(--admin-navy);
+  color: #fff;
+  border-color: var(--admin-navy);
+}
+
+.admin-notification-badge {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: #e53935;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  padding: 0 5px;
+  border: 2px solid #fff;
+}
+.admin-notification-btn[aria-expanded="true"] .admin-notification-badge {
+  border-color: var(--admin-navy);
+}
+
+.admin-notifications-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 380px;
+  background: #fff;
+  border: 1px solid #dce3ec;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 27, 61, 0.12);
+  z-index: 10;
+}
+.admin-notifications-panel.empty {
+  width: auto;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+  font-size: 13px;
+}
+.admin-notifications-panel header { padding: 12px 16px; border-bottom: 1px solid #e6ebf1; }
+.admin-notifications-panel header h3 { font-size: 14px; margin: 0; color: #071a36; }
+.admin-notifications-panel ul { list-style: none; max-height: 400px; overflow-y: auto; }
+.admin-notifications-panel li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #e6ebf1; }
+.admin-notifications-panel li:last-child { border-bottom: 0; }
+.admin-notifications-panel .req-info { font-size: 13px; }
+.admin-notifications-panel .req-info strong { display: block; font-size: 14px; color: #071a36; }
+.admin-notifications-panel .req-info small { color: #64748b; font-size: 12px; }
+.admin-notifications-panel .req-info span { display: block; font-size: 12px; margin-top: 4px; color: var(--admin-yellow); font-weight: 600; }
+.admin-notifications-panel .req-actions { display: flex; gap: 8px; }
+.admin-notifications-panel .req-actions button { font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 6px; border: 1px solid; cursor: pointer; }
+.admin-notifications-panel .req-actions .approve { background: #0c9b55; color: #fff; border-color: #087c43; }
+.admin-notifications-panel .req-actions .reject { background: transparent; color: #c62828; border-color: #e0e0e0; }
 
 .admin-kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; }
 .admin-kpi { min-height: 84px; padding: 20px; border: 1px solid #e2e7ee; border-radius: 12px; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,.02); display: flex; align-items: center; gap: 16px; transition: transform .2s ease, box-shadow .2s ease; }

@@ -155,6 +155,13 @@ export const adminApi = {
       },
     });
   },
+  redemptionRequests: () => apiRequest('/admin/redemption-requests'),
+  reviewRedemption(requestId, decision) {
+    return adminMutation(`/admin/redemption-requests/${requestId}/review`, {
+      method: 'POST',
+      body: { decision },
+    });
+  },
 };
 
 export const superAdminApi = {
@@ -190,4 +197,11 @@ export const portalApi = {
   dummyLogin: (phone, otp) => apiRequest('/portal/auth/dummy-login', { method: 'POST', body: { phone, otp } }),
   sessionDashboard: () => apiRequest('/portal/session/dashboard'),
   logout: () => apiRequest('/portal/session/logout', { method: 'POST' }),
+  requestRedemption(rewardId) {
+    return apiRequest('/portal/rewards/redeem', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: { rewardId },
+    });
+  },
 };

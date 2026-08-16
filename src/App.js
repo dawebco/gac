@@ -24,9 +24,6 @@ import { adminApi, ApiClientError, portalApi, superAdminApi } from './api';
 
 const heroBg = `${process.env.PUBLIC_URL}/imageeeee.png`;
 
-// In-memory "database" to simulate real-time redemption requests between customer and admin portals.
-let mockRedemptionRequestDB = [];
-
 const calculateRewardPoints = (bookingType, purchasedAmount) => {
   const amount = Math.max(0, Number(purchasedAmount) || 0);
   return bookingType === 'Flights' ? Math.floor(amount / 5) : Math.floor(amount);
@@ -148,23 +145,16 @@ function Dashboard({ customer, onLogout, onRefresh }) {
       return;
     }
     try {
-      // This would be an API call in a real application
-      // await portalApi.requestRedemption(reward.id, customer, reward);
-      const newDbRequest = {
-        id: `req_${Date.now()}`,
-        customerName: customer.name,
-        phone: customer.phone,
-        rewardName: reward.title,
-        points: reward.pointsRequired,
-      };
-      mockRedemptionRequestDB.push(newDbRequest);
+      await portalApi.requestRedemption(reward.id);
+      // Optimistically update the UI. A full refresh will sync the true state.
       const newPending = { rewardId: reward.id, rewardTitle: reward.title, points: reward.pointsRequired, requestedAt: new Date().toISOString() };
       setPendingRedemptions(current => [...current, newPending]);
       notify('Redemption request sent to admin for approval.', 'success');
+      if (onRefresh) onRefresh();
     } catch (error) {
       notify(error.message || 'Failed to send redemption request.', 'error');
     }
-  }, [summary.availablePoints, pendingRedemptions, notify, customer.name, customer.phone]);
+  }, [summary.availablePoints, pendingRedemptions, notify, onRefresh]);
 
   const allRewards = (rewardCatalog.length ? rewardCatalog : rewards.map((r, i) => ({ id: `FEAT_${i}`, category: 'FEATURED', imageUrl: r[0], title: r[1], description: r[2], pointsRequired: parseInt(r[3].replace(/[^0-9]/g, ''), 10) }))
     .concat(milestones.map((m, i) => ({ id: `MILE_${i}`, category: 'MILESTONE', pointsRequired: parseInt(m[0].replace(/,/g, '')), title: m[1], description: m[2], imageUrl: milestoneImages[i] })))
@@ -371,20 +361,17 @@ function AdminDashboard({ onLogout }) {
   const [redemptionRequests, setRedemptionRequests] = useState([]);
   const refreshData = useCallback(async () => {
     try {
-      const [nextCustomers, nextOverview, nextRewards] = await Promise.all([adminApi.customers(), adminApi.overview(), adminApi.rewards()]);
+      const [nextCustomers, nextOverview, nextRewards, nextRedemptions] = await Promise.all([
+        adminApi.customers(),
+        adminApi.overview(),
+        adminApi.rewards(),
+        adminApi.redemptionRequests(),
+      ]);
       setCustomers(nextCustomers);
       setOverview(nextOverview);
       setAdminRewards(nextRewards);
+      setRedemptionRequests(nextRedemptions);
       setDataError('');
-      // Initial population of mock DB on first load
-      if (mockRedemptionRequestDB.length === 0 && nextCustomers.length > 1) {
-        mockRedemptionRequestDB = [
-          { id: 'req1', customerName: nextCustomers[0].name, phone: nextCustomers[0].phone, rewardName: 'Beach Resort Voucher', points: 500 },
-          { id: 'req2', customerName: nextCustomers[1].name, phone: nextCustomers[1].phone, rewardName: 'Free Travel Accessories Kit', points: 750 },
-        ];
-      }
-      // Always sync local state with the "DB"
-      setRedemptionRequests([...mockRedemptionRequestDB]);
       return nextCustomers;
     } catch (error) {
       setDataError(error.message || 'Unable to load admin data.');
@@ -453,15 +440,11 @@ function AdminDashboard({ onLogout }) {
     openCustomer(customer);
   };
   const handleRedemptionReview = async (requestId, decision) => {
-    // In a real app, this would call an API:
-    // await adminApi.reviewRedemption(requestId, decision).then(refreshData);
-    mockRedemptionRequestDB = mockRedemptionRequestDB.filter(req => req.id !== requestId);
-    setRedemptionRequests(current => current.filter(req => req.id !== requestId)); // Update UI immediately
-    if (decision === 'APPROVE') {
-      // You might want to show a success message
-      console.log(`Approved request ${requestId}`);
-    } else {
-      console.log(`Rejected request ${requestId}`);
+    try {
+      await adminApi.reviewRedemption(requestId, decision);
+      await refreshData();
+    } catch (error) {
+      setDataError(error.message || 'Failed to process the request.');
     }
   };
 
@@ -496,11 +479,11 @@ function AdminRedemptionRequests({ requests, onReview }) {
   }
   return <div className="admin-notifications-panel">
     <header><h3>Redemption Requests</h3></header>
-    <ul>{requests.map(req => <li key={req.id}>
+    <ul>{requests.map(req => <li key={req.requestId}>
       <div className="req-info"><strong>{req.customerName}</strong><small>+91 {req.phone}</small><span>{req.rewardName} ({req.points} PTS)</span></div>
       <div className="req-actions">
-        <button className="approve" onClick={() => onReview(req.id, 'APPROVE')}>Approve</button>
-        <button className="reject" onClick={() => onReview(req.id, 'REJECT')}>Reject</button>
+        <button className="approve" onClick={() => onReview(req.requestId, 'APPROVE')}>Approve</button>
+        <button className="reject" onClick={() => onReview(req.requestId, 'REJECT')}>Reject</button>
       </div>
     </li>)}</ul>
   </div>;

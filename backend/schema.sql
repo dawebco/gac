@@ -352,6 +352,35 @@ CREATE TABLE IF NOT EXISTS reward_adjustment_requests (
   )
 );
 
+CREATE TABLE IF NOT EXISTS reward_redemption_requests (
+  request_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone_e164 phone_e164 NOT NULL
+    REFERENCES reward_accounts(phone_e164)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  reward_id uuid NOT NULL
+    REFERENCES reward_catalog(reward_id)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  points_at_request integer NOT NULL CHECK (points_at_request > 0),
+  request_status varchar(12) NOT NULL DEFAULT 'PENDING'
+    CHECK (request_status IN ('PENDING', 'APPROVED', 'REJECTED')),
+  reviewed_by_admin varchar(100),
+  review_note text,
+  ledger_entry_id uuid
+    REFERENCES reward_ledger(entry_id)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  idempotency_key varchar(100) NOT NULL UNIQUE,
+  requested_at timestamptz NOT NULL DEFAULT now(),
+  reviewed_at timestamptz,
+  CHECK (
+    (request_status = 'PENDING' AND reviewed_by_admin IS NULL AND reviewed_at IS NULL AND ledger_entry_id IS NULL)
+    OR (request_status = 'REJECTED' AND reviewed_by_admin IS NOT NULL AND reviewed_at IS NOT NULL AND ledger_entry_id IS NULL)
+    OR (request_status = 'APPROVED' AND reviewed_by_admin IS NOT NULL AND reviewed_at IS NOT NULL AND ledger_entry_id IS NOT NULL)
+  )
+);
+
+COMMENT ON TABLE reward_redemption_requests IS
+  'Approval queue for customer reward redemptions.';
+
 COMMENT ON TABLE reward_adjustment_requests IS
   'Four-eyes approval queue for manual reward adjustments. Only approved requests create immutable ledger entries.';
 
@@ -420,6 +449,10 @@ CREATE INDEX IF NOT EXISTS idx_reward_adjustment_requests_status_time
   ON reward_adjustment_requests(request_status, requested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reward_adjustment_requests_phone_time
   ON reward_adjustment_requests(phone_e164, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reward_redemption_requests_status_time
+  ON reward_redemption_requests(request_status, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reward_redemption_requests_phone_time
+  ON reward_redemption_requests(phone_e164, requested_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reward_ledger_reversal
   ON reward_ledger(reversal_of)
   WHERE reversal_of IS NOT NULL;
@@ -600,6 +633,7 @@ ALTER TABLE reward_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reward_ledger ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customer_reward_balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reward_adjustment_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reward_redemption_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE domain_events ENABLE ROW LEVEL SECURITY;
 
@@ -614,7 +648,7 @@ BEGIN
     FOREACH table_name IN ARRAY ARRAY[
       'customer_subjects', 'portal_customer_profiles', 'admin_customer_records',
       'customer_auth', 'customer_sessions', 'admin_sessions', 'reward_rules', 'reward_catalog',
-      'packages', 'bookings', 'booking_events', 'reward_accounts', 'reward_ledger',
+      'packages', 'bookings', 'booking_events', 'reward_accounts', 'reward_ledger', 'reward_redemption_requests',
       'customer_reward_balances', 'reward_adjustment_requests', 'admin_audit_logs', 'domain_events'
     ]
     LOOP
@@ -627,7 +661,7 @@ BEGIN
     FOREACH table_name IN ARRAY ARRAY[
       'customer_subjects', 'portal_customer_profiles', 'admin_customer_records',
       'customer_auth', 'customer_sessions', 'admin_sessions', 'reward_rules', 'reward_catalog',
-      'packages', 'bookings', 'booking_events', 'reward_accounts', 'reward_ledger',
+      'packages', 'bookings', 'booking_events', 'reward_accounts', 'reward_ledger', 'reward_redemption_requests',
       'customer_reward_balances', 'reward_adjustment_requests', 'admin_audit_logs', 'domain_events'
     ]
     LOOP
