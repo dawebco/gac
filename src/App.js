@@ -86,7 +86,7 @@ function Dashboard({ customer, onLogout, onRefresh }) {
   const [pendingRedemptions, setPendingRedemptions] = useState(customer.pendingRedemptions || []);
   const [toast, setToast] = useState('');
   const [toastType, setToastType] = useState('success');
-  const notify = (message, type = 'success') => { setToast(message); setToastType(type); };
+  const notify = useCallback((message, type = 'success') => { setToast(message); setToastType(type); }, []);
 
   const nav = [
     [LayoutDashboard, 'Dashboard', 'dashboard'], [Gift, 'Rewards', 'rewards'],
