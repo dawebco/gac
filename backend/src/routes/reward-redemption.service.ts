@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { query, withTransaction, type Client } from '../database/postgres';
+import { PoolClient } from 'pg';
+import { query, withTransaction } from '../database/postgres';
 import { ApiError } from '../shared/api-error';
 import type { AuditContext } from './customer.service';
 import { writeAdminAudit } from './audit.service';
@@ -21,7 +22,7 @@ interface RedemptionRequestRow {
   points_at_request: number;
 }
 
-async function createRedemptionLedgerEntry(client: Client, input: {
+async function createRedemptionLedgerEntry(client: PoolClient, input: {
   phone: string;
   points: number;
   reason: string;
@@ -64,7 +65,7 @@ export async function requestRedemption(input: {
       "SELECT 1 FROM reward_redemption_requests WHERE phone_e164 = $1 AND reward_id = $2 AND request_status = 'PENDING'",
       [input.phone, input.rewardId],
     );
-    if (existingRequestResult.rowCount > 0) {
+    if ((existingRequestResult.rowCount ?? 0) > 0) {
       throw new ApiError(409, 'DUPLICATE_REQUEST', 'You have already requested this reward.');
     }
 
