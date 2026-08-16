@@ -137,7 +137,7 @@ function Dashboard({ customer, onLogout, onRefresh }) {
 
   const handleRedeem = useCallback(async (reward) => {
     if (summary.availablePoints < reward.pointsRequired) {
-      notify('You do not have enough points to redeem this reward.', 'error');
+      notify('Insufficient points! Earn more points to unlock this reward.', 'error');
       return;
     }
     if (pendingRedemptions.some(r => r.rewardId === reward.id)) {
@@ -223,21 +223,14 @@ function RewardsContent({ includeEarning = false, rewardItems, redeemedItems = [
           <div className="section-heading"><h2>My Rewards</h2><p>Your collection of unlocked and redeemed rewards.</p></div>
           <div className="milestone-grid">{redeemedItems.map(reward => <article className="milestone-card redeemed" key={reward.id}><div className="reward-placeholder"><img src={reward.image} alt={reward.title}/></div><div className="milestone-copy"><span className="milestone-number redeemed-tag"><Check size={12}/>REDEEMED</span><h3>{reward.title}</h3><p>{reward.description}</p></div></article>)}</div>
         </div>}
-        <div className="milestones-section"><div className="milestone-grid">{rewardItems.map(reward => {
-          const isPending = pendingRedemptions.some(p => p.rewardId === reward.id);
-          const canRedeem = availablePoints >= reward.pointsRequired;
-          return <article className="milestone-card" key={reward.id}><div className="reward-placeholder"><img src={reward.image} alt={reward.title}/></div><div className="milestone-copy"><span className="milestone-number">{reward.pointsRequired.toLocaleString('en-IN')} PTS</span><h3>{reward.title}</h3><p>{reward.description}</p><button className="milestone-redeem-btn" onClick={() => onRedeem(reward)} disabled={isPending || !canRedeem}>{isPending ? 'Request Sent' : (canRedeem ? 'Redeem' : 'Get More Points')}</button></div></article>;
-        })}</div></div>
+        <div className="milestones-section"><div className="milestone-grid">{rewardItems.map(reward => <article className="milestone-card" key={reward.id}><div className="reward-placeholder"><img src={reward.image} alt={reward.title}/></div><div className="milestone-copy"><span className="milestone-number">{reward.pointsRequired.toLocaleString('en-IN')} PTS</span><h3>{reward.title}</h3><p>{reward.description}</p><button className="milestone-redeem-btn" onClick={() => onRedeem(reward)}>Redeem Now</button></div></article>)}</div></div>
         <div className="rewards-terms"><AlertCircle size={18}/><p><b>Reward terms:</b> Rewards are subject to availability and applicable terms. Flight benefits, hotel stays and travel experiences depend on partner availability. The brand, model, specifications and colour of merchandise will be decided by GAC Holidays at the time of redemption.</p></div>
       </section>;
 }
 
 function RewardCard({ reward, onRedeem, availablePoints, pendingRedemptions }) {
   const { image, title, description, pointsRequired, id } = reward;
-  const isPending = pendingRedemptions.some(p => p.rewardId === id);
-  const canRedeem = availablePoints >= pointsRequired;
-
-  return <article className="reward-card"><div className="reward-card-image"><img src={image} alt=""/><strong>{pointsRequired.toLocaleString('en-IN')} PTS</strong></div><div className="reward-card-copy"><h3>{title}</h3><p>{description}</p><small><Calendar size={13}/> Valid till 31 Dec 2026</small><button onClick={() => onRedeem(reward)} disabled={isPending || !canRedeem}>{isPending ? 'Request Sent' : (canRedeem ? 'Redeem Now' : 'Insufficent Points')} <span>→</span></button></div></article>;
+  return <article className="reward-card"><div className="reward-card-image"><img src={image} alt=""/><strong>{pointsRequired.toLocaleString('en-IN')} PTS</strong></div><div className="reward-card-copy"><h3>{title}</h3><p>{description}</p><small><Calendar size={13}/> Valid till 31 Dec 2026</small><button onClick={() => onRedeem(reward)}>Redeem Now <span>→</span></button></div></article>;
 }
 
 function Profile({ customer }) {
