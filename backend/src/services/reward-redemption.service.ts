@@ -159,3 +159,52 @@ export async function reviewRedemptionRequest(input: {
     return { success: true, message: 'Request approved.' };
   });
 }
+
+interface CustomerRedemptionRow {
+  request_id: string;
+  reward_id: string;
+  reward_code: string;
+  category: 'FEATURED' | 'MILESTONE';
+  title: string;
+  description: string;
+  image_url: string | null;
+  points_at_request: number;
+  request_status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requested_at: Date;
+  reviewed_at: Date | null;
+}
+
+export async function listCustomerRedemptions(phoneE164: string) {
+  const result = await query<CustomerRedemptionRow>(`
+    SELECT
+      req.request_id,
+      req.reward_id,
+      cat.reward_code,
+      cat.category,
+      cat.title,
+      cat.description,
+      cat.image_url,
+      req.points_at_request,
+      req.request_status,
+      req.requested_at,
+      req.reviewed_at
+    FROM reward_redemption_requests AS req
+    JOIN reward_catalog AS cat ON req.reward_id = cat.reward_id
+    WHERE req.phone_e164 = $1
+    ORDER BY req.requested_at DESC
+  `, [phoneE164]);
+
+  return result.rows.map(row => ({
+    id: row.request_id,
+    rewardId: row.reward_id,
+    code: row.reward_code,
+    category: row.category,
+    title: row.title,
+    description: row.description,
+    imageUrl: row.image_url,
+    pointsRequired: Number(row.points_at_request),
+    status: row.request_status,
+    requestedAt: row.requested_at,
+    reviewedAt: row.reviewed_at,
+  }));
+}

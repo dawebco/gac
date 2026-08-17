@@ -198,7 +198,7 @@ function Dashboard({ customer, onLogout, onRefresh }) {
       </section>
       </>}
       {view === 'history' && <section className="focused-view"><PurchaseHistory bookings={customer.bookingItems}/></section>}
-      {view === 'rewards' && <section className="focused-view"><RewardsContent rewardItems={milestoneRewards} redeemedItems={myRedeemedRewards} onRedeem={handleRedeem} /></section>}
+      {view === 'rewards' && <section className="focused-view"><RewardsContent rewardItems={milestoneRewards} redeemedItems={myRedeemedRewards} pendingItems={pendingRedemptions} onRedeem={handleRedeem} /></section>}
       {view === 'profile' && <Profile customer={customer}/>}
     </main>
   </div>;
@@ -214,17 +214,42 @@ function PurchaseHistory({ bookings }) {
   return <article className="panel history-panel"><div className="purchase-table"><div className="purchase-head"><span>DATE</span><span>DESCRIPTION</span><span>AMOUNT</span><span>PTS EARNED</span></div>{rows.map(row => <div className="purchase-row" key={`${row[0]}-${row[1]}`}>{row.map((cell, i) => <span key={`${cell}-${i}`} data-label={['Date','Description','Amount','Points'][i]}>{cell}</span>)}</div>)}{!rows.length && <div className="admin-empty"><Calendar size={20}/><span>No bookings are available yet.</span></div>}</div><div className="panel-note"><AlertCircle size={14}/> Points are credited after the completion of the trip.</div></article>;
 }
 
-function RewardsContent({ includeEarning = false, rewardItems, redeemedItems = [], onRedeem }) {
+function RewardsContent({ includeEarning = false, rewardItems, redeemedItems = [], pendingItems = [], onRedeem }) {
   return <section className="journey-rewards">
         {includeEarning && <>
         <div className="rewards-heading"><div><span>GAC JOURNEY REWARDS</span><h2>Book. Earn. Experience.</h2><p>Every eligible booking takes you closer to your next reward.</p></div><Gift size={32}/></div>
         <div className="earning-section"><div className="section-heading"><small>HOW IT WORKS</small><h2>Points Earning</h2></div><div className="earning-rules">{earningRules.map(([name, spend, points]) => <article key={name}><i><CircleDollarSign size={22}/></i><div><h3>{name}</h3><p><b>{spend}</b> spent earns <strong>{points}</strong></p></div></article>)}</div></div>
         </>}
-        {redeemedItems.length > 0 && <div className="milestones-section">
-          <div className="section-heading"><h2>My Rewards</h2><p>Your collection of unlocked and redeemed rewards.</p></div>
-          <div className="milestone-grid">{redeemedItems.map(reward => <article className="milestone-card redeemed" key={reward.id}><div className="reward-placeholder"><img src={reward.image} alt={reward.title}/></div><div className="milestone-copy"><span className="milestone-number redeemed-tag"><Check size={12}/>REDEEMED</span><h3>{reward.title}</h3><p>{reward.description}</p></div></article>)}</div>
+        {redeemedItems.length > 0 && <div className="milestones-section my-rewards-section">
+          <div className="section-heading"><h2>My Rewards ({redeemedItems.length})</h2><p>Your unlocked and approved rewards from GAC Holidays.</p></div>
+          <div className="milestone-grid">{redeemedItems.map(reward => <article className="milestone-card redeemed" key={reward.id || reward.rewardId}><div className="reward-placeholder"><img src={reward.image || rewardImage(reward)} alt={reward.title}/></div><div className="milestone-copy"><span className="milestone-number redeemed-tag"><Check size={12}/>APPROVED &amp; REDEEMED</span><h3>{reward.title}</h3><p>{reward.description}</p>{reward.reviewedAt && <small className="redeemed-date">Approved on {new Date(reward.reviewedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</small>}</div></article>)}</div>
         </div>}
-        <div className="milestones-section"><div className="milestone-grid">{rewardItems.map(reward => <article className="milestone-card" key={reward.id}><div className="reward-placeholder"><img src={reward.image} alt={reward.title}/></div><div className="milestone-copy"><span className="milestone-number">{reward.pointsRequired.toLocaleString('en-IN')} PTS</span><h3>{reward.title}</h3><p>{reward.description}</p><button className="milestone-redeem-btn" onClick={() => onRedeem(reward)}>Redeem Now</button></div></article>)}</div></div>
+        {pendingItems.length > 0 && <div className="milestones-section pending-rewards-section">
+          <div className="section-heading"><h2>Pending Approvals ({pendingItems.length})</h2><p>Reward requests currently being reviewed by administrator.</p></div>
+          <div className="milestone-grid">{pendingItems.map(reward => <article className="milestone-card pending" key={reward.id || reward.rewardId}><div className="reward-placeholder"><img src={reward.image || rewardImage(reward)} alt={reward.title}/></div><div className="milestone-copy"><span className="milestone-number pending-tag">PENDING APPROVAL</span><h3>{reward.title}</h3><p>{reward.description}</p></div></article>)}</div>
+        </div>}
+        <div className="milestones-section">
+          <div className="section-heading"><h2>Available Rewards &amp; Milestones</h2><p>Redeem your points for exclusive travel perks and milestone gifts.</p></div>
+          <div className="milestone-grid">{rewardItems.map(reward => {
+            const isPending = pendingItems.some(p => p.rewardId === reward.id);
+            const isRedeemed = redeemedItems.some(r => r.rewardId === reward.id);
+            return <article className={`milestone-card${isRedeemed ? ' already-redeemed' : ''}`} key={reward.id}>
+              <div className="reward-placeholder"><img src={reward.image || rewardImage(reward)} alt={reward.title}/></div>
+              <div className="milestone-copy">
+                <span className="milestone-number">{reward.pointsRequired.toLocaleString('en-IN')} PTS</span>
+                <h3>{reward.title}</h3>
+                <p>{reward.description}</p>
+                {isRedeemed ? (
+                  <button className="milestone-redeem-btn redeemed" disabled><Check size={13}/> Claimed</button>
+                ) : isPending ? (
+                  <button className="milestone-redeem-btn pending" disabled>Requested</button>
+                ) : (
+                  <button className="milestone-redeem-btn" onClick={() => onRedeem(reward)}>Redeem Now</button>
+                )}
+              </div>
+            </article>;
+          })}</div>
+        </div>
         <div className="rewards-terms"><AlertCircle size={18}/><p><b>Reward terms:</b> Rewards are subject to availability and applicable terms. Flight benefits, hotel stays and travel experiences depend on partner availability. The brand, model, specifications and colour of merchandise will be decided by GAC Holidays at the time of redemption.</p></div>
       </section>;
 }
@@ -267,6 +292,8 @@ function CustomerApp() {
       dashboard: data.dashboard,
       bookingItems: data.bookings || [],
       rewards: data.rewards || [],
+      redeemedRewards: data.redeemedRewards || [],
+      pendingRedemptions: data.pendingRedemptions || [],
     });
     return data;
   }, []);

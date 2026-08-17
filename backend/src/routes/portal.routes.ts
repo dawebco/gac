@@ -10,7 +10,7 @@ import { env } from '../config/env';
 import { query } from '../database/postgres';
 import { listBookings } from '../services/booking.service';
 import { listRewards } from '../services/reward-catalog.service';
-import { requestRedemption } from '../services/reward-redemption.service';
+import { listCustomerRedemptions, requestRedemption } from '../services/reward-redemption.service';
 
 const registrationSchema = z.object({
   phone: z.string().trim().min(10).max(20),
@@ -78,13 +78,16 @@ portalRouter.post('/customers/register', async (request, response) => {
 
   const input = registrationSchema.parse(request.body);
   const registration = await registerPortalCustomer(input);
-  const [dashboard, bookings, rewards] = await Promise.all([
+  const [dashboard, bookings, rewards, redemptions] = await Promise.all([
     getUnifiedDashboard(registration.profile.phoneE164),
     listBookings(registration.profile.phoneE164),
     listRewards(),
+    listCustomerRedemptions(registration.profile.phoneE164),
   ]);
+  const redeemedRewards = redemptions.filter(r => r.status === 'APPROVED');
+  const pendingRedemptions = redemptions.filter(r => r.status === 'PENDING');
   setCustomerSessionCookie(response, registration.sessionToken);
-  response.status(201).json({ data: { profile: registration.profile, dashboard, bookings, rewards } });
+  response.status(201).json({ data: { profile: registration.profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
 });
 
 portalRouter.post('/auth/dummy-login', async (request, response) => {
@@ -98,24 +101,30 @@ portalRouter.post('/auth/dummy-login', async (request, response) => {
   if (attempts > 20) throw new ApiError(429, 'DUMMY_LOGIN_RATE_LIMITED', 'Too many login attempts. Try again later.');
 
   const login = await createDummyCustomerLogin(input.phone);
-  const [dashboard, bookings, rewards] = await Promise.all([
+  const [dashboard, bookings, rewards, redemptions] = await Promise.all([
     getUnifiedDashboard(login.profile.phoneE164),
     listBookings(login.profile.phoneE164),
     listRewards(),
+    listCustomerRedemptions(login.profile.phoneE164),
   ]);
+  const redeemedRewards = redemptions.filter(r => r.status === 'APPROVED');
+  const pendingRedemptions = redemptions.filter(r => r.status === 'PENDING');
   setCustomerSessionCookie(response, login.sessionToken);
-  response.status(200).json({ data: { profile: login.profile, dashboard, bookings, rewards } });
+  response.status(200).json({ data: { profile: login.profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
 });
 
 portalRouter.get('/session/dashboard', requireCustomer, async (_request, response) => {
   const phoneE164 = response.locals.customer!.phoneE164;
-  const [profile, dashboard, bookings, rewards] = await Promise.all([
+  const [profile, dashboard, bookings, rewards, redemptions] = await Promise.all([
     getCustomerDisplayProfile(phoneE164),
     getUnifiedDashboard(phoneE164),
     listBookings(phoneE164),
     listRewards(),
+    listCustomerRedemptions(phoneE164),
   ]);
-  response.status(200).json({ data: { profile, dashboard, bookings, rewards } });
+  const redeemedRewards = redemptions.filter(r => r.status === 'APPROVED');
+  const pendingRedemptions = redemptions.filter(r => r.status === 'PENDING');
+  response.status(200).json({ data: { profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
 });
 
 portalRouter.post('/session/logout', requireCustomer, async (_request, response) => {
