@@ -465,7 +465,24 @@ function AdminDashboard({ onLogout }) {
       </>}
       {section === 'register' && <AdminRegisterPanel customers={customers} onExistingCustomer={manageExistingCustomer} onRegister={async form => { const customer = await adminApi.createCustomer(form); await refreshData(); return customer; }}/>} 
       {section === 'customers' && <AdminCustomersPanel customers={customers} searchable onSelect={openCustomer}/>} 
-      {section === 'rewards' && <AdminRewardsPanel rewards={adminRewards} onSaved={async updated => { setAdminRewards(current => current.map(reward => reward.id === updated.id ? updated : reward)); }}/>} 
+      {section === 'rewards' && (
+        <AdminRewardsPanel
+          rewards={adminRewards}
+          onCreated={async (created) => {
+            setAdminRewards(current => [...current, created]);
+            await refreshData();
+          }}
+          onSaved={async (updated) => {
+            setAdminRewards(current => current.map(reward => reward.id === updated.id ? updated : reward));
+            await refreshData();
+          }}
+          onDeleted={async (deletedId) => {
+            setAdminRewards(current => current.filter(reward => reward.id !== deletedId));
+            await refreshData();
+          }}
+          onRefresh={refreshData}
+        />
+      )} 
       {section === 'reports' && <AdminReportPanel customers={customers}/>}
       <aside className="admin-info"><b>i</b><span>Reward points are calculated automatically based on the company's criteria and updated in the system.</span></aside>
     </main>
@@ -639,35 +656,104 @@ function WhatsAppIcon() {
   return <svg className="whatsapp-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.04 2a9.84 9.84 0 0 0-8.47 14.83L2 22l5.3-1.54A9.95 9.95 0 1 0 12.04 2Zm0 17.89a8 8 0 0 1-4.08-1.12l-.29-.17-3.15.92.94-3.07-.19-.31a7.93 7.93 0 1 1 6.77 3.75Zm4.37-5.95c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.93-1.19a7.25 7.25 0 0 1-1.34-1.67c-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.39-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.69 2.58 4.1 3.62.57.25 1.02.4 1.37.51.58.18 1.1.16 1.51.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>;
 }
 
-function AdminRewardsPanel({ rewards: rewardItems, onSaved }) {
-  const [creating, setCreating] = useState(false);
+function AdminRewardsPanel({ rewards: rewardItems, onSaved, onCreated, onDeleted, onRefresh }) {
+  const [creatingCategory, setCreatingCategory] = useState(null);
+  const [feedback, setFeedback] = useState({ type: '', text: '' });
   const featured = rewardItems.filter(reward => reward.category === 'FEATURED');
   const milestonesList = rewardItems.filter(reward => reward.category === 'MILESTONE');
 
-  const addRewardCard = async () => {
-    setCreating(true);
+  const addRewardCard = async (category = 'FEATURED') => {
+    setCreatingCategory(category);
+    setFeedback({ type: '', text: '' });
     try {
+      const defaultTitle = category === 'FEATURED' ? 'New Available Reward' : 'New Reward Milestone';
+      const defaultDesc = category === 'FEATURED' ? 'Description for this reward card.' : 'Milestone reward experience details.';
+      const defaultPoints = category === 'FEATURED' ? 500 : 50000;
       const created = await adminApi.createReward({
-        title: 'New Reward',
-        description: 'Description for this reward card.',
-        pointsRequired: 500,
-        category: 'FEATURED',
+        title: defaultTitle,
+        description: defaultDesc,
+        pointsRequired: defaultPoints,
+        category,
       });
-      onSaved(created);
+      if (onCreated) await onCreated(created);
+      setFeedback({ type: 'success', text: `Added new ${category === 'FEATURED' ? 'available reward' : 'milestone'} card successfully.` });
+      setTimeout(() => setFeedback({ type: '', text: '' }), 4000);
     } catch (error) {
-      console.error(error);
+      setFeedback({ type: 'error', text: error.message || 'Unable to add reward card.' });
     } finally {
-      setCreating(false);
+      setCreatingCategory(null);
     }
   };
 
   return <section className="admin-rewards-manager">
-    <header className="admin-rewards-intro"><i><Gift size={22}/></i><div><h2>Customer Reward Catalog</h2><p>Upload a clearer image or edit the card copy and points. Saved changes appear on every customer dashboard.</p></div><button type="button" className="admin-primary-action" onClick={addRewardCard} disabled={creating}><Plus size={16}/>{creating ? 'Adding…' : 'Add reward card'}</button></header>
-    {[['Available Rewards', featured], ['Reward Milestones', milestonesList]].map(([heading, items]) => <section className="admin-reward-group" key={heading}><h3>{heading}</h3><div className="admin-reward-editor-grid">{items.map(reward => <AdminRewardEditor key={reward.id} reward={reward} onSaved={onSaved}/>)}</div></section>)}
+    <header className="admin-rewards-intro">
+      <i><Gift size={22}/></i>
+      <div>
+        <h2>Customer Reward Catalog</h2>
+        <p>Upload a clearer image or edit the card copy and points. Saved changes appear on every customer dashboard.</p>
+      </div>
+      <div className="admin-rewards-top-actions">
+        <button
+          type="button"
+          className="admin-primary-action"
+          onClick={() => addRewardCard('FEATURED')}
+          disabled={creatingCategory !== null}
+        >
+          <Plus size={16}/>{creatingCategory === 'FEATURED' ? 'Adding…' : 'Add Available Reward'}
+        </button>
+        <button
+          type="button"
+          className="admin-secondary-action"
+          onClick={() => addRewardCard('MILESTONE')}
+          disabled={creatingCategory !== null}
+        >
+          <Plus size={16}/>{creatingCategory === 'MILESTONE' ? 'Adding…' : 'Add Milestone'}
+        </button>
+      </div>
+    </header>
+    {feedback.text && (
+      <div className={`admin-feedback-banner ${feedback.type}`} role="alert">
+        {feedback.type === 'error' ? <AlertCircle size={16}/> : <CheckCircle2 size={16}/>}
+        <span>{feedback.text}</span>
+      </div>
+    )}
+    {[
+      ['Available Rewards', 'FEATURED', featured],
+      ['Reward Milestones', 'MILESTONE', milestonesList]
+    ].map(([heading, category, items]) => (
+      <section className="admin-reward-group" key={heading}>
+        <div className="admin-reward-group-header">
+          <h3>{heading} ({items.length})</h3>
+          <button
+            type="button"
+            className="admin-group-add-btn"
+            onClick={() => addRewardCard(category)}
+            disabled={creatingCategory !== null}
+          >
+            <Plus size={14}/> Add {category === 'FEATURED' ? 'Reward' : 'Milestone'}
+          </button>
+        </div>
+        {items.length === 0 ? (
+          <div className="admin-rewards-empty">No {heading.toLowerCase()} configured. Click add above to create one.</div>
+        ) : (
+          <div className="admin-reward-editor-grid">
+            {items.map(reward => (
+              <AdminRewardEditor
+                key={reward.id}
+                reward={reward}
+                onSaved={onSaved}
+                onDeleted={onDeleted}
+                onRefresh={onRefresh}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    ))}
   </section>;
 }
 
-function AdminRewardEditor({ reward, onSaved }) {
+function AdminRewardEditor({ reward, onSaved, onDeleted, onRefresh }) {
   const [title, setTitle] = useState(reward.title);
   const [description, setDescription] = useState(reward.description);
   const [pointsRequired, setPointsRequired] = useState(String(reward.pointsRequired));
@@ -677,23 +763,41 @@ function AdminRewardEditor({ reward, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const fileRef = useRef(null);
-  useEffect(() => { setTitle(reward.title); setDescription(reward.description); setPointsRequired(String(reward.pointsRequired)); }, [reward.title, reward.description, reward.pointsRequired]);
+
+  useEffect(() => {
+    setTitle(reward.title);
+    setDescription(reward.description);
+    setPointsRequired(String(reward.pointsRequired));
+  }, [reward.title, reward.description, reward.pointsRequired]);
+
   useEffect(() => {
     if (!image) { setPreview(''); return undefined; }
     const objectUrl = URL.createObjectURL(image);
     setPreview(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [image]);
+
   const save = async event => {
     event.preventDefault();
-    if (title.trim().length < 2 || description.trim().length < 3) { setMessage('Enter a title and description.'); return; }
+    if (title.trim().length < 2 || description.trim().length < 3) {
+      setMessage('Enter a title (min 2 chars) and description (min 3 chars).');
+      return;
+    }
     const points = Number(pointsRequired);
-    if (!Number.isInteger(points) || points <= 0) { setMessage('Points must be a positive number.'); return; }
+    if (!Number.isInteger(points) || points <= 0) {
+      setMessage('Points must be a positive number.');
+      return;
+    }
     setSaving(true);
     setMessage('');
     try {
-      const updated = await adminApi.updateReward(reward.id, { title: title.trim(), description: description.trim(), pointsRequired: points, image });
-      onSaved(updated);
+      const updated = await adminApi.updateReward(reward.id, {
+        title: title.trim(),
+        description: description.trim(),
+        pointsRequired: points,
+        image,
+      });
+      if (onSaved) await onSaved(updated);
       setImage(null);
       setMessage('Saved successfully.');
     } catch (error) {
@@ -702,24 +806,56 @@ function AdminRewardEditor({ reward, onSaved }) {
       setSaving(false);
     }
   };
+
   const remove = async () => {
+    if (!window.confirm(`Are you sure you want to remove the "${title}" reward card?`)) return;
     setDeleting(true);
+    setMessage('');
     try {
-      const deleted = await adminApi.deleteReward(reward.id);
-      onSaved(deleted);
+      await adminApi.deleteReward(reward.id);
+      if (onDeleted) await onDeleted(reward.id);
     } catch (error) {
       setMessage(error.message || 'Unable to remove this reward.');
-    } finally {
       setDeleting(false);
     }
   };
+
   return <form className="admin-reward-editor" onSubmit={save}>
-    <div className="admin-reward-image"><img src={preview || rewardImage(reward)} alt={title}/><button type="button" onClick={() => fileRef.current?.click()}><ImagePlus size={17}/>Change photo</button><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={event => { const file = event.target.files?.[0] || null; if (file && file.size > 8 * 1024 * 1024) { setMessage('Choose an image smaller than 8 MB.'); event.target.value = ''; return; } setImage(file); setMessage(''); }}/></div>
+    <div className="admin-reward-image">
+      <img src={preview || rewardImage(reward)} alt={title}/>
+      <button type="button" onClick={() => fileRef.current?.click()}>
+        <ImagePlus size={17}/>Change photo
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        hidden
+        onChange={event => {
+          const file = event.target.files?.[0] || null;
+          if (file && file.size > 8 * 1024 * 1024) {
+            setMessage('Choose an image smaller than 8 MB.');
+            event.target.value = '';
+            return;
+          }
+          setImage(file);
+          setMessage('');
+        }}
+      />
+    </div>
     <div className="admin-reward-editor-copy">
+      <span className="admin-reward-category-badge">{reward.category === 'FEATURED' ? 'Available Reward' : 'Milestone Reward'}</span>
       <label>Points<input type="number" min="1" step="1" value={pointsRequired} onChange={event => setPointsRequired(event.target.value)} /></label>
       <label>Reward title<input value={title} onChange={event => setTitle(event.target.value)} maxLength="200"/></label>
       <label>Description<textarea value={description} onChange={event => setDescription(event.target.value)} maxLength="2000" rows="3"/></label>
-      <div className="admin-reward-actions"><button type="submit" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : 'Save Changes'}</button><button type="button" className="admin-secondary-action danger" onClick={remove} disabled={deleting}><Trash2 size={16}/>{deleting ? 'Removing…' : 'Remove'}</button></div>
+      <div className="admin-reward-actions">
+        <button type="submit" disabled={saving}>
+          <Save size={16}/>{saving ? 'Saving…' : 'Save Changes'}
+        </button>
+        <button type="button" className="admin-secondary-action danger" onClick={remove} disabled={deleting}>
+          <Trash2 size={16}/>{deleting ? 'Removing…' : 'Remove'}
+        </button>
+      </div>
       {message && <small className={message.startsWith('Saved') ? 'success' : ''}>{message}</small>}
     </div>
   </form>;

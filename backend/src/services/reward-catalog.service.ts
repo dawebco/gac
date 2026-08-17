@@ -104,7 +104,7 @@ export async function createReward(input: {
   const result = await withTransaction(async (client) => {
     const nextOrderResult = await client.query<{ next_order: number }>(
       `SELECT coalesce(max(display_order), 0) + 1 AS next_order
-       FROM reward_catalog WHERE category = $1 AND is_active = true`,
+       FROM reward_catalog WHERE category = $1`,
       [input.category],
     );
     const displayOrder = Number(nextOrderResult.rows[0]?.next_order ?? 1);
