@@ -99,10 +99,10 @@ adminRouter.get('/redemption-requests', async (_req, res, next) => {
  */
 adminRouter.post('/redemption-requests/:requestId/review', requireCsrf, async (req, res, next) => {
   try {
-    const { decision, reviewNote } = req.body;
-    if (decision !== 'APPROVE' && decision !== 'REJECT') {
-      throw new ApiError(400, 'BAD_REQUEST', 'Decision must be APPROVE or REJECT.');
-    }
+    const { decision, reviewNote } = z.object({
+      decision: z.enum(['APPROVE', 'REJECT']),
+      reviewNote: z.string().trim().max(500).optional(),
+    }).parse(req.body);
     const result = await reviewRedemptionRequest({ requestId: z.string().uuid().parse(req.params.requestId), decision, reviewNote, audit: auditContext(req) });
     res.json({ ok: true, data: result });
   } catch (error) {
