@@ -61,10 +61,10 @@ portalRouter.post('/rewards/redeem', requireCustomer, async (req, res, next) => 
       idempotencyKey,
     });
 
-    res.status(202).json({ ok: true, data: { message: 'Redemption request submitted for approval.' } });
+    res.status(202).json({ data: { message: 'Redemption request submitted for approval.' } });
   } catch (error) {
     if (error instanceof ApiError && error.code === 'DUPLICATE_REQUEST') {
-      return res.status(200).json({ ok: true, data: { message: 'Redemption request already submitted.' } });
+      return res.status(200).json({ data: { message: 'Redemption request already submitted.' } });
     }
     next(error);
   }

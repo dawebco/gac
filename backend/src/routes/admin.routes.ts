@@ -87,7 +87,7 @@ adminRouter.get('/rewards', async (_request, response) => {
 adminRouter.get('/redemption-requests', async (_req, res, next) => {
   try {
     const requests = await listPendingRedemptionRequests();
-    res.json({ ok: true, data: requests });
+    res.status(200).json({ data: requests });
   } catch (error) {
     next(error);
   }
@@ -104,7 +104,7 @@ adminRouter.post('/redemption-requests/:requestId/review', requireCsrf, async (r
       reviewNote: z.string().trim().max(500).optional(),
     }).parse(req.body);
     const result = await reviewRedemptionRequest({ requestId: z.string().uuid().parse(req.params.requestId), decision, reviewNote, audit: auditContext(req) });
-    res.json({ ok: true, data: result });
+    res.status(200).json({ data: result });
   } catch (error) {
     next(error);
   }

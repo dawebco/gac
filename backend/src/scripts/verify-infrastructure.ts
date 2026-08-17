@@ -15,8 +15,10 @@ const requiredTables = [
   'packages',
   'portal_customer_profiles',
   'reward_accounts',
+  'reward_adjustment_requests',
   'reward_catalog',
   'reward_ledger',
+  'reward_redemption_requests',
   'reward_rules',
 ] as const;
 
