@@ -60,7 +60,7 @@ const rewardImageUpload = multer({
   },
 });
 
-export const adminRouter = Router();
+export const adminRouter: Router = Router();
 adminRouter.use(requireAdmin);
 
 function auditContext(request: Request): AuditContext {

@@ -3,7 +3,7 @@ import { env } from '../config/env';
 import { checkPostgresConnection } from '../database/postgres';
 import { checkRedisConnection } from '../database/redis';
 
-export const healthRouter = Router();
+export const healthRouter: Router = Router();
 
 healthRouter.get('/live', (_request, response) => {
   response.status(200).json({

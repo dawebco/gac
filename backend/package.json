@@ -6,9 +6,9 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "npx tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "npx tsc -p tsconfig.json --noEmit",
     "db:apply": "tsx src/scripts/apply-schema.ts",
     "verify:infra": "tsx src/scripts/verify-infrastructure.ts",
     "verify:api": "tsx src/scripts/verify-api.ts",
@@ -21,6 +21,13 @@
   "dependencies": {
     "@noble/hashes": "1.8.0",
     "@supabase/supabase-js": "^2.112.3",
+    "@types/compression": "^1.8.1",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
     "@upstash/redis": "^1.38.2",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
@@ -32,17 +39,10 @@
     "pg": "^8.23.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "typescript": "5.9.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/compression": "^1.8.1",
-    "@types/cookie-parser": "^1.4.10",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/multer": "^2.2.0",
-    "@types/node": "^26.2.0",
-    "@types/pg": "^8.21.0",
-    "tsx": "^4.23.12",
-    "typescript": "5.9.3"
+    "tsx": "^4.23.12"
   }
 }

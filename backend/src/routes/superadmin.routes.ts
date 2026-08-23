@@ -11,7 +11,7 @@ const reviewSchema = z.object({
   reviewNote: z.string().trim().max(500).optional(),
 });
 
-export const superAdminRouter = Router();
+export const superAdminRouter: Router = Router();
 superAdminRouter.use(requireSuperAdmin);
 
 function auditContext(request: Request): AuditContext {

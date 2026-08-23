@@ -1,7 +1,7 @@
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import express from 'express';
+import express, { Express } from 'express';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import { env } from './config/env';
@@ -16,7 +16,7 @@ import { portalRouter } from './routes/portal.routes';
 import { superAdminAuthRouter } from './routes/superadmin-auth.routes';
 import { superAdminRouter } from './routes/superadmin.routes';
 
-export const app = express();
+export const app: Express = express();
 
 app.disable('x-powered-by');
 app.set('trust proxy', env.TRUST_PROXY);

@@ -9,7 +9,7 @@ const loginSchema = z.object({
   password: z.string().min(8).max(200),
 });
 
-export const adminAuthRouter = Router();
+export const adminAuthRouter: Router = Router();
 
 adminAuthRouter.post('/login', async (request, response) => {
   const credentials = loginSchema.parse(request.body);

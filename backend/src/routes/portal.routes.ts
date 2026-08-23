@@ -23,7 +23,7 @@ const dummyLoginSchema = z.object({
   otp: z.string().regex(/^\d{4}$/, 'Enter any four digits.'),
 });
 
-export const portalRouter = Router();
+export const portalRouter: Router = Router();
 
 function setCustomerSessionCookie(response: Response, sessionToken: string): void {
   // Customer portal sessions must be isolated from admin and super-admin cookies.
