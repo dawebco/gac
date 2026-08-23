@@ -99756,48 +99756,56 @@ portalRouter.post("/customers/register", async (request, response) => {
   setCustomerSessionCookie(response, registration.sessionToken);
   response.status(201).json({ data: { profile: registration.profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
 });
-portalRouter.post("/auth/send-otp", async (request, response) => {
-  const input = dummyLoginSchema.pick({ phone: true }).parse(request.body);
-  const phoneClean = input.phone.replace(/[^0-9]/g, "");
-  const phoneE164 = phoneClean.length === 10 ? `+91${phoneClean}` : `+${phoneClean}`;
-  const rateLimitKey = `send-otp:${sha256(`${request.ip ?? "unknown"}:${phoneE164}`)}`;
-  const attempts = await redis.incr(rateLimitKey);
-  if (attempts === 1) await redis.expire(rateLimitKey, 60);
-  if (attempts > 5) throw new ApiError(429, "RATE_LIMITED", "Too many OTP requests. Please wait a minute before requesting another code.");
-  const otp = Math.floor(1e3 + Math.random() * 9e3).toString();
-  await redis.set(`otp:${phoneE164}`, otp, "EX", 300);
-  if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {
-    try {
-      await sendWhatsAppOtpMessage({ phoneE164, otp });
-    } catch (err) {
-      console.error("Failed to dispatch WhatsApp OTP:", err);
+portalRouter.post("/auth/send-otp", async (request, response, next) => {
+  try {
+    const input = dummyLoginSchema.pick({ phone: true }).parse(request.body);
+    const phoneClean = input.phone.replace(/[^0-9]/g, "");
+    const phoneE164 = phoneClean.length === 10 ? `+91${phoneClean}` : `+${phoneClean}`;
+    const rateLimitKey = `send-otp:${sha256(`${request.ip ?? "unknown"}:${phoneE164}`)}`;
+    const attempts = await redis.incr(rateLimitKey);
+    if (attempts === 1) await redis.expire(rateLimitKey, 60);
+    if (attempts > 5) throw new ApiError(429, "RATE_LIMITED", "Too many OTP requests. Please wait a minute before requesting another code.");
+    const otp = Math.floor(1e3 + Math.random() * 9e3).toString();
+    await redis.set(`otp:${phoneE164}`, otp, { ex: 300 });
+    if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {
+      try {
+        await sendWhatsAppOtpMessage({ phoneE164, otp });
+      } catch (err) {
+        console.error("Failed to dispatch WhatsApp OTP:", err);
+      }
+    } else {
+      console.log(`[OTP DEBUG] OTP for ${phoneE164} is: ${otp}`);
     }
-  } else {
-    console.log(`[OTP DEBUG] OTP for ${phoneE164} is: ${otp}`);
+    response.status(200).json({ data: { message: "OTP sent successfully to your WhatsApp number." } });
+  } catch (error51) {
+    next(error51);
   }
-  response.status(200).json({ data: { message: "OTP sent successfully to your WhatsApp number." } });
 });
-portalRouter.post("/auth/verify-otp", async (request, response) => {
-  const input = dummyLoginSchema.parse(request.body);
-  const phoneClean = input.phone.replace(/[^0-9]/g, "");
-  const phoneE164 = phoneClean.length === 10 ? `+91${phoneClean}` : `+${phoneClean}`;
-  const storedOtp = await redis.get(`otp:${phoneE164}`);
-  const isMatch = storedOtp && storedOtp === input.otp || env.ENABLE_DUMMY_OTP_AUTH && input.otp.length === 4;
-  if (!isMatch) {
-    throw new ApiError(400, "INVALID_OTP", "Invalid or expired OTP code. Please request a new one.");
+portalRouter.post("/auth/verify-otp", async (request, response, next) => {
+  try {
+    const input = dummyLoginSchema.parse(request.body);
+    const phoneClean = input.phone.replace(/[^0-9]/g, "");
+    const phoneE164 = phoneClean.length === 10 ? `+91${phoneClean}` : `+${phoneClean}`;
+    const storedOtp = await redis.get(`otp:${phoneE164}`);
+    const isMatch = storedOtp && String(storedOtp) === input.otp || env.ENABLE_DUMMY_OTP_AUTH && input.otp.length === 4;
+    if (!isMatch) {
+      throw new ApiError(400, "INVALID_OTP", "Invalid or expired OTP code. Please request a new one.");
+    }
+    await redis.del(`otp:${phoneE164}`);
+    const login = await createDummyCustomerLogin(input.phone);
+    const [dashboard, bookings, rewards, redemptions] = await Promise.all([
+      getUnifiedDashboard(login.profile.phoneE164),
+      listBookings(login.profile.phoneE164),
+      listRewards(),
+      listCustomerRedemptions(login.profile.phoneE164)
+    ]);
+    const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED");
+    const pendingRedemptions = redemptions.filter((r) => r.status === "PENDING");
+    setCustomerSessionCookie(response, login.sessionToken);
+    response.status(200).json({ data: { profile: login.profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
+  } catch (error51) {
+    next(error51);
   }
-  await redis.del(`otp:${phoneE164}`);
-  const login = await createDummyCustomerLogin(input.phone);
-  const [dashboard, bookings, rewards, redemptions] = await Promise.all([
-    getUnifiedDashboard(login.profile.phoneE164),
-    listBookings(login.profile.phoneE164),
-    listRewards(),
-    listCustomerRedemptions(login.profile.phoneE164)
-  ]);
-  const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED");
-  const pendingRedemptions = redemptions.filter((r) => r.status === "PENDING");
-  setCustomerSessionCookie(response, login.sessionToken);
-  response.status(200).json({ data: { profile: login.profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
 });
 portalRouter.post("/auth/dummy-login", async (request, response) => {
   if (!env.ENABLE_DUMMY_OTP_AUTH) {
