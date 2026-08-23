@@ -324,8 +324,30 @@ function CustomerApp() {
   const validEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
   const switchMode = next => { setMode(next); setOtpSent(false); setOtp(['','','','']); setToast(''); };
   const register = async (e) => { e.preventDefault(); if (regName.trim().length < 2) return notify('Please enter your full name.', 'error'); if (!validEmail(regEmail)) return notify('Enter a valid email address.', 'error'); if (!validPhone(regPhone)) return notify('Enter a valid 10-digit mobile number.', 'error'); if (!regDob) return notify('Please select your date of birth.', 'error'); try { const data = await portalApi.register({ name: regName.trim(), email: regEmail.trim().toLowerCase(), phone: regPhone, dateOfBirth: regDob }); applyPortalData(data); setLoginPhone(regPhone); setMode('login'); setToast('Registration successful! You can now login.'); setToastType('success'); } catch (error) { notify(error.message || 'Registration failed. Please try again.', 'error'); } };
-  const sendOtp = (e) => { e.preventDefault(); if (!validPhone(loginPhone)) return notify('Enter a valid 10-digit mobile number.', 'error'); notify('Dummy OTP sent. Enter any 4 digits.'); setOtpSent(true); };
-  const verify = async (e) => { e.preventDefault(); const enteredOtp = otp.join(''); if (enteredOtp.length !== 4) return notify('Enter the complete 4-digit OTP.', 'error'); try { const data = applyPortalData(await portalApi.dummyLogin(loginPhone, enteredOtp)); if (data.profile.phone !== loginPhone) return notify('The customer session does not match this mobile number.', 'error'); setMode('dashboard'); setToast(''); } catch (error) { notify(error.message || 'Unable to load your account.', 'error'); } };
+  const sendOtp = async (e) => {
+    if (e) e.preventDefault();
+    if (!validPhone(loginPhone)) return notify('Enter a valid 10-digit mobile number.', 'error');
+    try {
+      await portalApi.sendOtp(loginPhone);
+      setOtpSent(true);
+      notify('OTP sent to your WhatsApp number!');
+    } catch (error) {
+      notify(error.message || 'Failed to send OTP via WhatsApp. Please try again.', 'error');
+    }
+  };
+  const verify = async (e) => {
+    e.preventDefault();
+    const enteredOtp = otp.join('');
+    if (enteredOtp.length !== 4) return notify('Enter the complete 4-digit OTP.', 'error');
+    try {
+      const data = applyPortalData(await portalApi.verifyOtp(loginPhone, enteredOtp));
+      if (data.profile.phone !== loginPhone) return notify('The customer session does not match this mobile number.', 'error');
+      setMode('dashboard');
+      setToast('');
+    } catch (error) {
+      notify(error.message || 'Invalid or expired OTP. Please try again.', 'error');
+    }
+  };
   const changeOtp = (index, value) => { const digit = value.replace(/\D/g, '').slice(-1); const next = [...otp]; next[index] = digit; setOtp(next); if (digit && index < 3) otpRefs.current[index + 1]?.focus(); };
   const phoneChange = setter => e => setter(e.target.value.replace(/\D/g, '').slice(0, 10));
 

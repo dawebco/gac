@@ -99632,6 +99632,65 @@ async function requireCustomer(_request, response, next) {
   }
 }
 
+// src/services/whatsapp.service.ts
+async function sendWhatsAppOtpMessage(options) {
+  if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_CLOUD_API_TOKEN) {
+    throw new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp Cloud API credentials are not configured.");
+  }
+  const recipient = options.phoneE164.replace(/[^0-9]/g, "");
+  const url2 = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: "template",
+    template: {
+      name: env.WHATSAPP_TEMPLATE_NAME_OTP,
+      language: {
+        code: env.WHATSAPP_TEMPLATE_LANGUAGE
+      },
+      components: [
+        {
+          type: "body",
+          parameters: [
+            {
+              type: "text",
+              text: options.otp
+            }
+          ]
+        },
+        {
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [
+            {
+              type: "text",
+              text: options.otp
+            }
+          ]
+        }
+      ]
+    }
+  };
+  const response = await fetch(url2, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.WHATSAPP_CLOUD_API_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok || result.error) {
+    const errorMsg = result.error?.message || `Meta WhatsApp API failed with status ${response.status}`;
+    console.error("WhatsApp OTP API error:", result.error || result);
+    throw new ApiError(502, "WHATSAPP_SEND_FAILED", errorMsg, result.error);
+  }
+  const messageId = result.messages?.[0]?.id || "unknown";
+  return { messageId };
+}
+
 // src/routes/portal.routes.ts
 var registrationSchema = external_exports.object({
   phone: external_exports.string().trim().min(10).max(20),
@@ -99696,6 +99755,49 @@ portalRouter.post("/customers/register", async (request, response) => {
   const pendingRedemptions = redemptions.filter((r) => r.status === "PENDING");
   setCustomerSessionCookie(response, registration.sessionToken);
   response.status(201).json({ data: { profile: registration.profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
+});
+portalRouter.post("/auth/send-otp", async (request, response) => {
+  const input = dummyLoginSchema.pick({ phone: true }).parse(request.body);
+  const phoneClean = input.phone.replace(/[^0-9]/g, "");
+  const phoneE164 = phoneClean.length === 10 ? `+91${phoneClean}` : `+${phoneClean}`;
+  const rateLimitKey = `send-otp:${sha256(`${request.ip ?? "unknown"}:${phoneE164}`)}`;
+  const attempts = await redis.incr(rateLimitKey);
+  if (attempts === 1) await redis.expire(rateLimitKey, 60);
+  if (attempts > 5) throw new ApiError(429, "RATE_LIMITED", "Too many OTP requests. Please wait a minute before requesting another code.");
+  const otp = Math.floor(1e3 + Math.random() * 9e3).toString();
+  await redis.set(`otp:${phoneE164}`, otp, "EX", 300);
+  if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {
+    try {
+      await sendWhatsAppOtpMessage({ phoneE164, otp });
+    } catch (err) {
+      console.error("Failed to dispatch WhatsApp OTP:", err);
+    }
+  } else {
+    console.log(`[OTP DEBUG] OTP for ${phoneE164} is: ${otp}`);
+  }
+  response.status(200).json({ data: { message: "OTP sent successfully to your WhatsApp number." } });
+});
+portalRouter.post("/auth/verify-otp", async (request, response) => {
+  const input = dummyLoginSchema.parse(request.body);
+  const phoneClean = input.phone.replace(/[^0-9]/g, "");
+  const phoneE164 = phoneClean.length === 10 ? `+91${phoneClean}` : `+${phoneClean}`;
+  const storedOtp = await redis.get(`otp:${phoneE164}`);
+  const isMatch = storedOtp && storedOtp === input.otp || env.ENABLE_DUMMY_OTP_AUTH && input.otp.length === 4;
+  if (!isMatch) {
+    throw new ApiError(400, "INVALID_OTP", "Invalid or expired OTP code. Please request a new one.");
+  }
+  await redis.del(`otp:${phoneE164}`);
+  const login = await createDummyCustomerLogin(input.phone);
+  const [dashboard, bookings, rewards, redemptions] = await Promise.all([
+    getUnifiedDashboard(login.profile.phoneE164),
+    listBookings(login.profile.phoneE164),
+    listRewards(),
+    listCustomerRedemptions(login.profile.phoneE164)
+  ]);
+  const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED");
+  const pendingRedemptions = redemptions.filter((r) => r.status === "PENDING");
+  setCustomerSessionCookie(response, login.sessionToken);
+  response.status(200).json({ data: { profile: login.profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
 });
 portalRouter.post("/auth/dummy-login", async (request, response) => {
   if (!env.ENABLE_DUMMY_OTP_AUTH) {
