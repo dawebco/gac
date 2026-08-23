@@ -5,9 +5,9 @@
   "description": "Production backend API for GAC Holidays",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "npx tsc -p tsconfig.json",
-    "start": "node dist/server.js",
+    "dev": "tsx watch src/app.ts",
+    "build": "esbuild src/app.ts --bundle --platform=node --target=node22 --outfile=dist/app.js --external:pg-native",
+    "start": "node dist/app.js",
     "typecheck": "npx tsc -p tsconfig.json --noEmit",
     "db:apply": "tsx src/scripts/apply-schema.ts",
     "verify:infra": "tsx src/scripts/verify-infrastructure.ts",
@@ -43,6 +43,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "esbuild": "^0.25.0",
     "tsx": "^4.23.12"
   }
 }
