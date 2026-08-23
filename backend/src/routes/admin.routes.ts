@@ -16,6 +16,7 @@ import {
 import { getUnifiedDashboard, requestRewardAdjustment } from '../services/reward.service';
 import { createReward, deleteReward, listRewards, updateReward } from '../services/reward-catalog.service';
 import { listPendingRedemptionRequests, reviewRedemptionRequest } from '../services/reward-redemption.service';
+import { sendWhatsAppBookingRewardMessage } from '../services/whatsapp.service';
 import { ApiError } from '../shared/api-error';
 
 const bookingTypeSchema = z.enum(['FLIGHTS', 'HOTELS', 'HOLIDAYS']);
@@ -214,4 +215,40 @@ adminRouter.post('/customers/:phone/reward-adjustments', requireCsrf, async (req
     audit: auditContext(request),
   });
   response.status(201).json({ data });
+});
+
+const sendRewardMessageSchema = z.object({
+  name: z.string().trim().min(1),
+  phone: z.string().trim().min(10),
+  bookingType: z.string().optional().default('Holidays'),
+  earnedPoints: z.coerce.number().min(0),
+});
+
+adminRouter.post('/send-whatsapp-reward', requireCsrf, async (request, response, next) => {
+  try {
+    const input = sendRewardMessageSchema.parse(request.body);
+    const phoneE164 = normalizeIndianPhone(input.phone);
+
+    let totalBalance = input.earnedPoints;
+    try {
+      const existing = await getAdminCustomer(phoneE164);
+      if (existing) {
+        totalBalance = existing.availablePoints;
+      }
+    } catch (_err) {
+      // Customer does not exist yet; totalBalance defaults to earnedPoints
+    }
+
+    const { messageId } = await sendWhatsAppBookingRewardMessage({
+      phoneE164,
+      customerName: input.name,
+      pointsEarned: input.earnedPoints,
+      totalBalance,
+      bookingType: input.bookingType,
+    });
+
+    response.status(200).json({ data: { messageId, message: 'WhatsApp reward notification sent successfully.' } });
+  } catch (error) {
+    next(error);
+  }
 });

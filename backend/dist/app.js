@@ -99432,6 +99432,123 @@ async function listCustomerRedemptions(phoneE164) {
   }));
 }
 
+// src/services/whatsapp.service.ts
+async function sendWhatsAppOtpMessage(options) {
+  if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_CLOUD_API_TOKEN) {
+    throw new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp Cloud API credentials are not configured.");
+  }
+  const recipient = options.phoneE164.replace(/[^0-9]/g, "");
+  const url2 = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: "template",
+    template: {
+      name: env.WHATSAPP_TEMPLATE_NAME_OTP,
+      language: {
+        code: env.WHATSAPP_TEMPLATE_LANGUAGE
+      },
+      components: [
+        {
+          type: "body",
+          parameters: [
+            {
+              type: "text",
+              text: options.otp
+            }
+          ]
+        }
+      ]
+    }
+  };
+  const response = await fetch(url2, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.WHATSAPP_CLOUD_API_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok || result.error) {
+    const errorMsg = result.error?.message || `Meta WhatsApp API failed with status ${response.status}`;
+    console.error("WhatsApp OTP API error:", result.error || result);
+    throw new ApiError(502, "WHATSAPP_SEND_FAILED", errorMsg, result.error);
+  }
+  const messageId = result.messages?.[0]?.id || "unknown";
+  return { messageId };
+}
+async function sendWhatsAppBookingRewardMessage(options) {
+  if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_CLOUD_API_TOKEN) {
+    throw new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp Cloud API credentials are not configured.");
+  }
+  const recipient = options.phoneE164.replace(/[^0-9]/g, "");
+  const url2 = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const normalizedType = String(options.bookingType || "").toUpperCase();
+  const imageFileName = normalizedType.includes("FLIGHT") ? "flight.png" : normalizedType.includes("HOTEL") ? "hotel.png" : "holiday.png";
+  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || "https://gac-dawebco.vercel.app").replace(/\/$/, "");
+  const headerImageUrl = options.imageUrl || `${publicBaseUrl}/images/${imageFileName}`;
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: "template",
+    template: {
+      name: env.WHATSAPP_TEMPLATE_NAME_REWARDS || "gac_booking_rewards",
+      language: {
+        code: env.WHATSAPP_TEMPLATE_LANGUAGE || "en"
+      },
+      components: [
+        {
+          type: "header",
+          parameters: [
+            {
+              type: "image",
+              image: {
+                link: headerImageUrl
+              }
+            }
+          ]
+        },
+        {
+          type: "body",
+          parameters: [
+            {
+              type: "text",
+              text: String(options.customerName)
+            },
+            {
+              type: "text",
+              text: String(options.pointsEarned)
+            },
+            {
+              type: "text",
+              text: String(options.totalBalance)
+            }
+          ]
+        }
+      ]
+    }
+  };
+  const response = await fetch(url2, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.WHATSAPP_CLOUD_API_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok || result.error) {
+    const errorMsg = result.error?.message || `Meta WhatsApp API failed with status ${response.status}`;
+    console.error("WhatsApp Reward API error:", result.error || result);
+    throw new ApiError(502, "WHATSAPP_SEND_FAILED", errorMsg, result.error);
+  }
+  const messageId = result.messages?.[0]?.id || "unknown";
+  return { messageId };
+}
+
 // src/routes/admin.routes.ts
 var bookingTypeSchema = external_exports.enum(["FLIGHTS", "HOTELS", "HOLIDAYS"]);
 var bookingSchema = external_exports.object({
@@ -99606,6 +99723,36 @@ adminRouter.post("/customers/:phone/reward-adjustments", requireCsrf, async (req
   });
   response.status(201).json({ data });
 });
+var sendRewardMessageSchema = external_exports.object({
+  name: external_exports.string().trim().min(1),
+  phone: external_exports.string().trim().min(10),
+  bookingType: external_exports.string().optional().default("Holidays"),
+  earnedPoints: external_exports.coerce.number().min(0)
+});
+adminRouter.post("/send-whatsapp-reward", requireCsrf, async (request, response, next) => {
+  try {
+    const input = sendRewardMessageSchema.parse(request.body);
+    const phoneE164 = normalizeIndianPhone(input.phone);
+    let totalBalance = input.earnedPoints;
+    try {
+      const existing = await getAdminCustomer(phoneE164);
+      if (existing) {
+        totalBalance = existing.availablePoints;
+      }
+    } catch (_err) {
+    }
+    const { messageId } = await sendWhatsAppBookingRewardMessage({
+      phoneE164,
+      customerName: input.name,
+      pointsEarned: input.earnedPoints,
+      totalBalance,
+      bookingType: input.bookingType
+    });
+    response.status(200).json({ data: { messageId, message: "WhatsApp reward notification sent successfully." } });
+  } catch (error51) {
+    next(error51);
+  }
+});
 
 // src/routes/portal.routes.ts
 var import_express4 = __toESM(require_express2());
@@ -99630,54 +99777,6 @@ async function requireCustomer(_request, response, next) {
   } catch (error51) {
     next(error51);
   }
-}
-
-// src/services/whatsapp.service.ts
-async function sendWhatsAppOtpMessage(options) {
-  if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_CLOUD_API_TOKEN) {
-    throw new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp Cloud API credentials are not configured.");
-  }
-  const recipient = options.phoneE164.replace(/[^0-9]/g, "");
-  const url2 = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-  const payload = {
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
-    to: recipient,
-    type: "template",
-    template: {
-      name: env.WHATSAPP_TEMPLATE_NAME_OTP,
-      language: {
-        code: env.WHATSAPP_TEMPLATE_LANGUAGE
-      },
-      components: [
-        {
-          type: "body",
-          parameters: [
-            {
-              type: "text",
-              text: options.otp
-            }
-          ]
-        }
-      ]
-    }
-  };
-  const response = await fetch(url2, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${env.WHATSAPP_CLOUD_API_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-  const result = await response.json();
-  if (!response.ok || result.error) {
-    const errorMsg = result.error?.message || `Meta WhatsApp API failed with status ${response.status}`;
-    console.error("WhatsApp OTP API error:", result.error || result);
-    throw new ApiError(502, "WHATSAPP_SEND_FAILED", errorMsg, result.error);
-  }
-  const messageId = result.messages?.[0]?.id || "unknown";
-  return { messageId };
 }
 
 // src/routes/portal.routes.ts

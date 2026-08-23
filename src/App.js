@@ -652,9 +652,21 @@ function AdminRegisterPanel({ customers, onRegister, onExistingCustomer }) {
     && /^\d{10}$/.test(form.phone)
     && Boolean(form.type)
     && Number(form.amount) > 0;
-  const sendRewards = () => {
+  const sendRewards = async () => {
     if (!formComplete || rewardsSent) return;
-    setRewardsSent(true);
+    const earned = calculate();
+    try {
+      await adminApi.sendWhatsAppReward({
+        name: form.name.trim(),
+        phone: form.phone,
+        type: form.type,
+        earnedPoints: earned,
+      });
+      setRewardsSent(true);
+      setMessage(`WhatsApp notification sent successfully to +91 ${form.phone}!`);
+    } catch (error) {
+      setMessage(error.message || 'Failed to send WhatsApp message.');
+    }
   };
   const calculate = () => {
     const amount = Math.max(0, Number(form.amount) || 0);

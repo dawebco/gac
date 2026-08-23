@@ -11,7 +11,7 @@ export interface SendWhatsAppBookingRewardOptions {
   customerName: string;
   pointsEarned: number;
   totalBalance: number;
-  bookingType?: 'FLIGHTS' | 'HOTELS' | 'HOLIDAYS';
+  bookingType?: 'FLIGHTS' | 'HOTELS' | 'HOLIDAYS' | 'Flights' | 'Hotels' | 'Holidays' | string;
   imageUrl?: string;
 }
 
@@ -27,12 +27,6 @@ interface MetaApiResponse {
     fbtrace_id?: string;
   };
 }
-
-const BOOKING_HEADER_IMAGES: Record<'FLIGHTS' | 'HOTELS' | 'HOLIDAYS', string> = {
-  FLIGHTS: 'https://gac-dawebco.vercel.app/images/flight.png',
-  HOTELS: 'https://gac-dawebco.vercel.app/images/hotel.png',
-  HOLIDAYS: 'https://gac-dawebco.vercel.app/images/holiday.png',
-};
 
 /**
  * Sends a WhatsApp OTP authentication message via Meta Cloud API using the configured template.
@@ -103,9 +97,14 @@ export async function sendWhatsAppBookingRewardMessage(
   const recipient = options.phoneE164.replace(/[^0-9]/g, '');
   const url = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
-  const typeImageUrl = options.bookingType ? BOOKING_HEADER_IMAGES[options.bookingType] : undefined;
-  const defaultImageUrl = 'https://gac-dawebco.vercel.app/images/holiday.png';
-  const headerImageUrl = options.imageUrl || typeImageUrl || defaultImageUrl;
+  const normalizedType = String(options.bookingType || '').toUpperCase();
+  const imageFileName = normalizedType.includes('FLIGHT')
+    ? 'flight.png'
+    : normalizedType.includes('HOTEL')
+      ? 'hotel.png'
+      : 'holiday.png';
+  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || 'https://gac-dawebco.vercel.app').replace(/\/$/, '');
+  const headerImageUrl = options.imageUrl || `${publicBaseUrl}/images/${imageFileName}`;
 
   const payload = {
     messaging_product: 'whatsapp',
@@ -113,9 +112,9 @@ export async function sendWhatsAppBookingRewardMessage(
     to: recipient,
     type: 'template',
     template: {
-      name: env.WHATSAPP_TEMPLATE_NAME_REWARDS,
+      name: env.WHATSAPP_TEMPLATE_NAME_REWARDS || 'gac_booking_rewards',
       language: {
-        code: env.WHATSAPP_TEMPLATE_LANGUAGE,
+        code: env.WHATSAPP_TEMPLATE_LANGUAGE || 'en',
       },
       components: [
         {
@@ -134,15 +133,15 @@ export async function sendWhatsAppBookingRewardMessage(
           parameters: [
             {
               type: 'text',
-              text: options.customerName,
+              text: String(options.customerName),
             },
             {
               type: 'text',
-              text: String(options.pointsEarned.toLocaleString('en-IN')),
+              text: String(options.pointsEarned),
             },
             {
               type: 'text',
-              text: String(options.totalBalance.toLocaleString('en-IN')),
+              text: String(options.totalBalance),
             },
           ],
         },

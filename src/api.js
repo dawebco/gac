@@ -162,6 +162,12 @@ export const adminApi = {
       body: { decision },
     });
   },
+  sendWhatsAppReward({ name, phone, type, earnedPoints }) {
+    return adminMutation('/admin/send-whatsapp-reward', {
+      method: 'POST',
+      body: { name, phone, bookingType: type, earnedPoints },
+    });
+  },
 };
 
 export const superAdminApi = {
