@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Production backend API for GAC Holidays",
-  "main": "dist/server.js",
+  "main": "dist/app.js",
   "scripts": {
     "dev": "tsx watch src/app.ts",
     "build": "esbuild src/app.ts --bundle --platform=node --target=node22 --outfile=dist/app.js --external:pg-native",
