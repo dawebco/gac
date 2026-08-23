@@ -21,7 +21,7 @@ const registrationSchema = z.object({
 });
 const dummyLoginSchema = z.object({
   phone: z.string().trim().min(10).max(20),
-  otp: z.string().regex(/^\d{4}$/, 'Enter any four digits.'),
+  otp: z.string().regex(/^\d{4,6}$/, 'Enter the verification code.'),
 });
 
 export const portalRouter: Router = Router();
@@ -102,7 +102,7 @@ portalRouter.post('/auth/send-otp', async (request, response, next) => {
     if (attempts === 1) await redis.expire(rateLimitKey, 60);
     if (attempts > 5) throw new ApiError(429, 'RATE_LIMITED', 'Too many OTP requests. Please wait a minute before requesting another code.');
 
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
     await redis.set(`otp:${phoneE164}`, otp, { ex: 300 });
 
     if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {

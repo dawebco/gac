@@ -84060,7 +84060,7 @@ var envSchema = external_exports.object({
   WHATSAPP_CLOUD_API_TOKEN: external_exports.string().trim().optional(),
   WHATSAPP_TEMPLATE_NAME_OTP: external_exports.string().trim().default("gac_holidays"),
   WHATSAPP_TEMPLATE_NAME_REWARDS: external_exports.string().trim().default("gac_booking_rewards"),
-  WHATSAPP_TEMPLATE_LANGUAGE: external_exports.string().trim().default("en_US"),
+  WHATSAPP_TEMPLATE_LANGUAGE: external_exports.string().trim().default("en"),
   WHATSAPP_GRAPH_VERSION: external_exports.string().trim().default("v20.0")
 });
 var parsed = envSchema.safeParse(process.env);
@@ -99700,7 +99700,7 @@ var registrationSchema = external_exports.object({
 });
 var dummyLoginSchema = external_exports.object({
   phone: external_exports.string().trim().min(10).max(20),
-  otp: external_exports.string().regex(/^\d{4}$/, "Enter any four digits.")
+  otp: external_exports.string().regex(/^\d{4,6}$/, "Enter the verification code.")
 });
 var portalRouter = (0, import_express4.Router)();
 function setCustomerSessionCookie(response, sessionToken) {
@@ -99765,7 +99765,7 @@ portalRouter.post("/auth/send-otp", async (request, response, next) => {
     const attempts = await redis.incr(rateLimitKey);
     if (attempts === 1) await redis.expire(rateLimitKey, 60);
     if (attempts > 5) throw new ApiError(429, "RATE_LIMITED", "Too many OTP requests. Please wait a minute before requesting another code.");
-    const otp = Math.floor(1e3 + Math.random() * 9e3).toString();
+    const otp = Math.floor(1e5 + Math.random() * 9e5).toString();
     await redis.set(`otp:${phoneE164}`, otp, { ex: 300 });
     if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {
       try {
