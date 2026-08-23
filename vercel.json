@@ -7,7 +7,6 @@
     },
     "backend": {
       "root": "backend",
-      "framework": null,
       "entrypoint": "dist/app.js",
       "installCommand": "npm install",
       "buildCommand": "npm run build"
