@@ -1,4 +1,3 @@
-import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express, { Express } from 'express';
@@ -24,7 +23,13 @@ app.set('trust proxy', env.TRUST_PROXY);
 app.use(requestContext);
 app.use(pinoHttp({ logger }));
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(compression());
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const compression = require('compression');
+  app.use(compression());
+} catch {
+  // Compression is natively provided at Vercel's edge network layer
+}
 app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

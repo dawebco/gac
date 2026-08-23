@@ -3,11 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@noble/hashes": "1.8.0",
+    "@supabase/supabase-js": "^2.112.3",
+    "@upstash/redis": "^1.38.2",
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
     "lucide-react": "^0.344.0",
+    "multer": "^2.2.0",
+    "pg": "^8.23.0",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-phone-input-2": "^2.15.1",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "zod": "^4.4.3"
   },
   "scripts": {
     "start": "concurrently --kill-others --names FRONTEND,BACKEND --prefix-colors blue,yellow \"npm:frontend\" \"npm:backend:dev\"",
