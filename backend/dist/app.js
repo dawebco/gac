@@ -91182,30 +91182,47 @@ async function reviewCustomerDeletionRequest(input) {
       return { success: true, message: "Customer deletion request rejected." };
     }
     const phoneE164 = req.phone_e164;
-    await client.query(`DELETE FROM reward_redemption_requests WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM reward_adjustment_requests WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM reward_ledger WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM customer_reward_balances WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM reward_accounts WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM booking_events WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM bookings WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM customer_sessions WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM customer_auth WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM portal_customer_profiles WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM admin_customer_records WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(`DELETE FROM domain_events WHERE phone_e164 = $1`, [phoneE164]);
-    await client.query(
-      `DELETE FROM admin_audit_logs
-       WHERE entity_id = $1 OR request_id = $1`,
-      [phoneE164]
-    );
-    await client.query(`DELETE FROM customer_subjects WHERE phone_e164 = $1`, [phoneE164]);
     await client.query(
       `UPDATE customer_deletion_requests
        SET request_status = 'APPROVED', reviewed_by = $1, reviewed_at = now(), review_note = $2
        WHERE request_id = $3`,
       [input.superAdminUsername, input.reviewNote || null, input.requestId]
     );
+    console.log(`[Delete Cascade] Starting hard delete for customer: ${phoneE164}`);
+    console.log("[Delete Cascade] Deleting reward redemption requests...");
+    await client.query(`DELETE FROM reward_redemption_requests WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting reward adjustment requests...");
+    await client.query(`DELETE FROM reward_adjustment_requests WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Nulling reward_ledger reversal_of self-references...");
+    await client.query(`UPDATE reward_ledger SET reversal_of = NULL WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting reward ledger entries...");
+    await client.query(`DELETE FROM reward_ledger WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting customer reward balances...");
+    await client.query(`DELETE FROM customer_reward_balances WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting reward account...");
+    await client.query(`DELETE FROM reward_accounts WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting booking events...");
+    await client.query(`DELETE FROM booking_events WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting bookings...");
+    await client.query(`DELETE FROM bookings WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting customer sessions...");
+    await client.query(`DELETE FROM customer_sessions WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting customer auth record...");
+    await client.query(`DELETE FROM customer_auth WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting portal customer profile...");
+    await client.query(`DELETE FROM portal_customer_profiles WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting admin customer record...");
+    await client.query(`DELETE FROM admin_customer_records WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting domain events...");
+    await client.query(`DELETE FROM domain_events WHERE phone_e164 = $1`, [phoneE164]);
+    console.log("[Delete Cascade] Deleting admin audit logs for this entity...");
+    await client.query(
+      `DELETE FROM admin_audit_logs WHERE entity_id = $1`,
+      [phoneE164]
+    );
+    console.log("[Delete Cascade] Deleting customer_subjects root record...");
+    await client.query(`DELETE FROM customer_subjects WHERE phone_e164 = $1`, [phoneE164]);
+    console.log(`[Delete Cascade] Hard delete complete for customer: ${phoneE164}`);
     await writeAdminAudit(client, {
       ...input.audit,
       action: "CUSTOMER_HARD_DELETED",

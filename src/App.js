@@ -977,19 +977,15 @@ function AdminDeleteCustomerPanel({ customers, onRefresh }) {
     }
   }, []);
 
-  useEffect(() => {
-    fetchPending();
-  }, [fetchPending]);
+  useEffect(() => { fetchPending(); }, [fetchPending]);
 
-  const filteredCustomers = customers.filter(c => {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      (c.name && c.name.toLowerCase().includes(q)) ||
-      (c.phone && c.phone.includes(q)) ||
-      (c.email && c.email.toLowerCase().includes(q))
-    );
-  });
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredCustomers = customers.filter(c =>
+    !normalizedQuery ||
+    (c.name && c.name.toLowerCase().includes(normalizedQuery)) ||
+    (c.phone && c.phone.includes(normalizedQuery)) ||
+    (c.email && c.email.toLowerCase().includes(normalizedQuery))
+  );
 
   const openDeleteModal = customer => {
     setTargetCustomer(customer);
@@ -1008,14 +1004,13 @@ function AdminDeleteCustomerPanel({ customers, onRefresh }) {
   const handleDeletionSubmit = async event => {
     event.preventDefault();
     if (confirmInput.trim() !== 'confirm_delete') {
-      setModalError('You must type exact string "confirm_delete" to submit.');
+      setModalError('You must type the exact string "confirm_delete" to submit.');
       return;
     }
     if (reason.trim().length < 3) {
-      setModalError('Please enter a valid reason for deletion.');
+      setModalError('Please enter a valid reason for deletion (at least 3 characters).');
       return;
     }
-
     setSubmitting(true);
     setModalError('');
     try {
@@ -1035,80 +1030,62 @@ function AdminDeleteCustomerPanel({ customers, onRefresh }) {
     }
   };
 
-  return <section className="admin-rewards-manager">
-    <header className="admin-rewards-intro">
-      <i><UserX size={22}/></i>
+  const canSubmit = confirmInput.trim() === 'confirm_delete' && reason.trim().length >= 3;
+
+  return <section className="admin-customers-card all-customers">
+    <header>
+      <i><UserX size={20}/></i>
       <div>
-        <h2>Delete Customer Profile</h2>
-        <p>Search for a customer to request profile removal. Deletion requests require Super Admin authorization before permanent cascade erasure.</p>
+        <h2>Delete Customer</h2>
+        <p>Request permanent removal of a customer profile. All requests require Super Admin authorization.</p>
       </div>
     </header>
 
-    <div className="admin-search-bar" style={{ marginBottom: '20px' }}>
-      <Search size={18}/>
+    <label className="admin-search">
+      <Search size={19}/>
       <input
-        type="search"
-        placeholder="Search customer by name or phone number..."
         value={query}
         onChange={e => setQuery(e.target.value)}
+        placeholder="Search customer by name, email or phone..."
+        aria-label="Search customers for deletion"
       />
+    </label>
+
+    <div className="admin-table delete-cust-table" role="table" aria-label="Customers available for deletion">
+      <div className="admin-table-head" role="row">
+        <span>Customer Name</span>
+        <span>Phone Number</span>
+        <span>Bookings</span>
+        <span>Points</span>
+        <span>Action</span>
+      </div>
+      {filteredCustomers.map(c => (
+        <div className="admin-table-row" role="row" key={c.phone}>
+          <span><b>{c.name}</b><small style={{ display: 'block', color: '#94a3b8', fontSize: '11px', fontWeight: 400 }}>{c.email}</small></span>
+          <span>{c.phone}</span>
+          <span>{c.totalBookings}</span>
+          <span>{(c.availablePoints ?? 0).toLocaleString('en-IN')} pts</span>
+          <span>
+            <button type="button" className="btn-delete-red" onClick={() => openDeleteModal(c)}>
+              <UserX size={13}/> Delete
+            </button>
+          </span>
+        </div>
+      ))}
+      {!filteredCustomers.length && (
+        <div className="admin-empty">
+          <Search size={22}/><span>{normalizedQuery ? `No customers match "${query}".` : 'No active customers.'}</span>
+        </div>
+      )}
     </div>
 
-    <section className="admin-reward-group">
-      <div className="admin-reward-group-header">
-        <h3>Active Customers ({filteredCustomers.length})</h3>
-      </div>
-      <div className="admin-customers-table-wrap" style={{ overflowX: 'auto' }}>
-        <table className="admin-customers-table">
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Phone</th>
-              <th>Bookings</th>
-              <th>Points</th>
-              <th style={{ textAlign: 'right' }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCustomers.map(c => (
-              <tr key={c.phone}>
-                <td><strong>{c.name}</strong><br/><small>{c.email}</small></td>
-                <td>{c.phone}</td>
-                <td>{c.totalBookings}</td>
-                <td>{c.availablePoints?.toLocaleString('en-IN')} PTS</td>
-                <td style={{ textAlign: 'right' }}>
-                  <button
-                    type="button"
-                    className="admin-secondary-action danger"
-                    onClick={() => openDeleteModal(c)}
-                    style={{ padding: '6px 12px', fontSize: '13px' }}
-                  >
-                    <UserX size={15}/> Delete Customer
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!filteredCustomers.length && (
-              <tr>
-                <td colSpan="5" style={{ textAlign: 'center', padding: '24px' }}>No active customers match your search.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section className="superadmin-requests-card" style={{ marginTop: '32px' }}>
+    <section className="superadmin-requests-card" style={{ marginTop: '28px' }}>
       <header>
         <div><span>PENDING DELETION REQUESTS</span><strong>{pendingRequests.length}</strong></div>
       </header>
       <div className="superadmin-request-table" role="table" aria-label="Pending customer deletion requests">
         <div className="superadmin-request-head" role="row">
-          <span>Customer</span>
-          <span>Reason</span>
-          <span>Requested By</span>
-          <span>Date</span>
-          <span>Status</span>
+          <span>Customer</span><span>Reason</span><span>Requested By</span><span>Date</span><span>Status</span>
         </div>
         {pendingRequests.map(req => (
           <article className="superadmin-request-row" role="row" key={req.id}>
@@ -1126,68 +1103,64 @@ function AdminDeleteCustomerPanel({ customers, onRefresh }) {
     </section>
 
     {targetCustomer && (
-      <div className="admin-modal-backdrop" style={{
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
-        alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px'
-      }}>
-        <div className="admin-modal-card" style={{
-          backgroundColor: '#fff', borderRadius: '12px', padding: '24px',
-          maxWidth: '480px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
-        }}>
-          <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ margin: 0, color: '#dc2626', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertCircle size={20}/> Confirm Customer Deletion Request
-            </h3>
-            <button type="button" onClick={closeDeleteModal} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              <X size={20}/>
-            </button>
-          </header>
+      <div className="admin-modal-backdrop">
+        <div className="admin-customer-modal" style={{ maxWidth: '480px', textAlign: 'left' }}>
+          <button type="button" className="admin-modal-close" onClick={closeDeleteModal} aria-label="Close"><X size={16}/></button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
+            <i style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              <AlertCircle size={22}/>
+            </i>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '17px', color: '#dc2626' }}>Confirm Deletion Request</h2>
+              <p style={{ margin: '3px 0 0', color: '#64748b', fontSize: '12px' }}>This action will be sent to Super Admin for final approval.</p>
+            </div>
+          </div>
+
+          <div style={{ padding: '12px 14px', borderRadius: '10px', background: '#f8fafc', marginBottom: '18px', fontSize: '13px', color: '#334155' }}>
+            <b>{targetCustomer.name}</b><span style={{ color: '#94a3b8', marginLeft: '8px', fontFamily: 'monospace', fontSize: '12px' }}>+91 {targetCustomer.phone}</span>
+          </div>
 
           <form onSubmit={handleDeletionSubmit}>
-            <p style={{ fontSize: '14px', color: '#475569', marginBottom: '16px' }}>
-              You are requesting deletion for customer <strong>{targetCustomer.name}</strong> (<code>+91 {targetCustomer.phone}</code>). This will be routed to Super Admin for approval.
-            </p>
-
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#1e293b', marginBottom: '6px' }}>
-              Reason for Deletion
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '.3px', marginBottom: '6px' }}>REASON FOR DELETION</label>
               <textarea
-                rows="3"
+                rows={3}
                 value={reason}
                 onChange={e => setReason(e.target.value)}
-                placeholder="Enter detailed reason for deletion request..."
+                placeholder="Enter a detailed reason for this deletion request..."
                 required
-                style={{ width: '100%', marginTop: '4px', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '9px 10px', borderRadius: '8px', border: '1px solid #d9e2ec', font: '13px Inter, Arial', resize: 'vertical', outline: 'none' }}
               />
-            </label>
+            </div>
 
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#1e293b', marginTop: '12px', marginBottom: '6px' }}>
-              Type <code style={{ color: '#dc2626' }}>confirm_delete</code> to unlock submission:
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '.3px', marginBottom: '6px' }}>
+                TYPE <code style={{ color: '#dc2626', background: '#fee2e2', padding: '1px 5px', borderRadius: '4px' }}>confirm_delete</code> TO UNLOCK
+              </label>
               <input
                 type="text"
                 value={confirmInput}
                 onChange={e => setConfirmInput(e.target.value)}
                 placeholder="confirm_delete"
                 required
-                style={{ width: '100%', marginTop: '4px', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                autoComplete="off"
+                style={{ width: '100%', boxSizing: 'border-box', padding: '9px 10px', borderRadius: '8px', border: `1px solid ${confirmInput.trim() === 'confirm_delete' ? '#16a34a' : '#d9e2ec'}`, font: '13px/1 Inter, Arial', outline: 'none', fontFamily: 'monospace' }}
               />
-            </label>
+            </div>
 
             {modalError && (
-              <div className="admin-login-error" role="alert" style={{ marginTop: '12px', marginBottom: '12px' }}>
-                <AlertCircle size={15}/>{modalError}
+              <div className="admin-login-error" role="alert" style={{ marginBottom: '14px' }}>
+                <AlertCircle size={14}/>{modalError}
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
-              <button type="button" className="admin-secondary-action" onClick={closeDeleteModal}>
-                Cancel
-              </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button type="button" className="admin-secondary-action" onClick={closeDeleteModal}>Cancel</button>
               <button
                 type="submit"
-                className="admin-secondary-action danger"
-                disabled={submitting || confirmInput.trim() !== 'confirm_delete' || reason.trim().length < 3}
-                style={{ opacity: confirmInput.trim() === 'confirm_delete' && reason.trim().length >= 3 ? 1 : 0.5 }}
+                className="btn-delete-red"
+                disabled={submitting || !canSubmit}
+                style={{ minHeight: '40px', padding: '0 18px', borderRadius: '8px', fontSize: '12px', opacity: canSubmit ? 1 : 0.45 }}
               >
                 {submitting ? 'Submitting…' : 'Submit Deletion Request'}
               </button>

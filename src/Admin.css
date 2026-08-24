@@ -411,6 +411,15 @@
 .admin-form-actions button { min-height: 43px; padding: 0 18px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: 700 12px Inter, Arial, sans-serif; cursor: pointer; }
 .admin-secondary-action { min-height: 40px; padding: 0 16px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: 700 12px Inter, Arial, sans-serif; cursor: pointer; border: 1px solid #e8b100; background: #fff8dc; color: #705400; transition: background .18s ease, transform .18s ease, box-shadow .18s ease; }
 .admin-secondary-action:hover { background: #ffefad; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(232,177,0,.15); }
+
+/* Delete Customer — 5-column variant of the standard admin table */
+.delete-cust-table .admin-table-head,
+.delete-cust-table .admin-table-row { grid-template-columns: 2fr 1.1fr .5fr .9fr auto; }
+.delete-cust-table .admin-table-row { cursor: default; }
+.delete-cust-table .admin-table-row:hover { background: #fff; }
+.btn-delete-red { min-height: 32px; padding: 0 12px; border: 1px solid #dc2626; border-radius: 6px; background: #dc2626; color: #fff; font: 700 11px Inter, Arial, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background .15s ease; white-space: nowrap; }
+.btn-delete-red:hover { background: #b91c1c; border-color: #b91c1c; }
+.btn-delete-red:disabled { opacity: .5; cursor: not-allowed; }
 .admin-primary-action { min-height: 40px; padding: 0 16px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: 700 12px Inter, Arial, sans-serif; cursor: pointer; border: 1px solid var(--admin-navy, #001735); background: var(--admin-navy, #001735); color: #fff; transition: background .18s ease, transform .18s ease, box-shadow .18s ease; }
 .admin-primary-action:hover { background: var(--admin-navy-soft, #082954); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,23,53,.2); }
 .admin-send-rewards { border: 1px solid #149f5b; background: #18ad62; color: #fff; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
