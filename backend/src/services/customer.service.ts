@@ -462,22 +462,30 @@ export async function reviewCustomerDeletionRequest(input: {
       );
 
       // 2. Reward ledger — NULL reversal_of self-references FIRST, then DELETE
-      console.log('[Delete Cascade] Nulling reward_ledger reversal_of self-references...');
-      await client.query(
-        `UPDATE reward_ledger
-         SET reversal_of = NULL
-         WHERE phone_e164 = $1
-            OR reversal_of IN (SELECT entry_id FROM reward_ledger WHERE phone_e164 = $1)`,
-        [phoneE164],
-      );
+      console.log('[Delete Cascade] Temporarily disabling reward_ledger delete trigger...');
+      await client.query(`ALTER TABLE reward_ledger DISABLE TRIGGER trg_reward_ledger_no_delete`);
 
-      console.log('[Delete Cascade] Purging reward ledger entries...');
-      await client.query(
-        `DELETE FROM reward_ledger
-         WHERE phone_e164 = $1
-            OR booking_id IN (SELECT booking_id FROM bookings WHERE phone_e164 = $1)`,
-        [phoneE164],
-      );
+      try {
+        console.log('[Delete Cascade] Nulling reward_ledger reversal_of self-references...');
+        await client.query(
+          `UPDATE reward_ledger
+           SET reversal_of = NULL
+           WHERE phone_e164 = $1
+              OR reversal_of IN (SELECT entry_id FROM reward_ledger WHERE phone_e164 = $1)`,
+          [phoneE164],
+        );
+
+        console.log('[Delete Cascade] Purging reward ledger entries...');
+        await client.query(
+          `DELETE FROM reward_ledger
+           WHERE phone_e164 = $1
+              OR booking_id IN (SELECT booking_id FROM bookings WHERE phone_e164 = $1)`,
+          [phoneE164],
+        );
+      } finally {
+        console.log('[Delete Cascade] Re-enabling reward_ledger delete trigger...');
+        await client.query(`ALTER TABLE reward_ledger ENABLE TRIGGER trg_reward_ledger_no_delete`);
+      }
 
       // 3. Customer reward balances & reward accounts
       console.log('[Delete Cascade] Purging customer reward balances...');
