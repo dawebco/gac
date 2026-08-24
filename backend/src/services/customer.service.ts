@@ -270,3 +270,186 @@ export async function getAdminOverview() {
     totalPointsRedeemed: Number(row.total_points_redeemed),
   };
 }
+
+export interface CustomerDeletionRequestRow {
+  request_id: string;
+  phone_e164: string;
+  customer_name: string;
+  reason: string;
+  request_status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requested_by: string;
+  reviewed_by: string | null;
+  review_note: string | null;
+  requested_at: Date;
+  reviewed_at: Date | null;
+}
+
+export async function ensureCustomerDeletionRequestsTable(): Promise<void> {
+  await query(`
+    CREATE TABLE IF NOT EXISTS customer_deletion_requests (
+      request_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      phone_e164 phone_e164 NOT NULL,
+      customer_name varchar(150) NOT NULL,
+      reason text NOT NULL,
+      request_status varchar(12) NOT NULL DEFAULT 'PENDING' CHECK (request_status IN ('PENDING', 'APPROVED', 'REJECTED')),
+      requested_by varchar(100) NOT NULL,
+      reviewed_by varchar(100),
+      review_note text,
+      requested_at timestamptz NOT NULL DEFAULT now(),
+      reviewed_at timestamptz
+    );
+  `);
+}
+
+export async function requestCustomerDeletion(input: {
+  phone: string;
+  reason: string;
+  confirmCode: string;
+  audit: AuditContext;
+}) {
+  await ensureCustomerDeletionRequestsTable();
+  if (input.confirmCode !== 'confirm_delete') {
+    throw new ApiError(400, 'INVALID_CONFIRM_CODE', 'Confirmation code must match exact string "confirm_delete".');
+  }
+  const phoneE164 = normalizeIndianPhone(input.phone);
+  const trimmedReason = input.reason.trim();
+  if (trimmedReason.length < 3) {
+    throw new ApiError(400, 'INVALID_REASON', 'Please enter a valid reason for deletion (at least 3 characters).');
+  }
+
+  const customerResult = await query<{ display_name: string }>(
+    `SELECT display_name FROM admin_customer_records WHERE phone_e164 = $1 AND record_status = 'ACTIVE' LIMIT 1`,
+    [phoneE164],
+  );
+  const customer = customerResult.rows[0];
+  if (!customer) {
+    throw new ApiError(404, 'CUSTOMER_NOT_FOUND', 'Customer record not found.');
+  }
+
+  const result = await query<{ request_id: string }>(
+    `INSERT INTO customer_deletion_requests (
+       phone_e164, customer_name, reason, requested_by
+     ) VALUES ($1, $2, $3, $4)
+     RETURNING request_id`,
+    [phoneE164, customer.display_name, trimmedReason, input.audit.adminUsername],
+  );
+
+  return {
+    requestId: result.rows[0]!.request_id,
+    message: 'Deletion request submitted for Super Admin approval.',
+  };
+}
+
+export async function listPendingCustomerDeletionRequests() {
+  await ensureCustomerDeletionRequestsTable();
+  const result = await query<CustomerDeletionRequestRow>(
+    `SELECT * FROM customer_deletion_requests
+     WHERE request_status = 'PENDING'
+     ORDER BY requested_at DESC`,
+  );
+  return result.rows.map((row) => ({
+    id: row.request_id,
+    phoneE164: row.phone_e164,
+    customerName: row.customer_name,
+    reason: row.reason,
+    status: row.request_status,
+    requestedBy: row.requested_by,
+    requestedAt: row.requested_at,
+  }));
+}
+
+export async function listSuperAdminCustomerDeletionRequests(status = 'PENDING') {
+  await ensureCustomerDeletionRequestsTable();
+  const statement = `
+    SELECT * FROM customer_deletion_requests
+    WHERE ($1 = 'ALL' OR request_status = $1)
+    ORDER BY requested_at DESC
+  `;
+  const result = await query<CustomerDeletionRequestRow>(statement, [status]);
+
+  return result.rows.map((row) => ({
+    id: row.request_id,
+    phoneE164: row.phone_e164,
+    customerName: row.customer_name,
+    reason: row.reason,
+    status: row.request_status,
+    requestedBy: row.requested_by,
+    reviewedBy: row.reviewed_by,
+    requestedAt: row.requested_at,
+    reviewedAt: row.reviewed_at,
+  }));
+}
+
+export async function reviewCustomerDeletionRequest(input: {
+  requestId: string;
+  decision: 'APPROVE' | 'REJECT';
+  reviewNote?: string;
+  superAdminUsername: string;
+  audit: AuditContext;
+}) {
+  await ensureCustomerDeletionRequestsTable();
+  return withTransaction(async (client) => {
+    const requestResult = await client.query<CustomerDeletionRequestRow>(
+      `SELECT * FROM customer_deletion_requests WHERE request_id = $1 AND request_status = 'PENDING' FOR UPDATE`,
+      [input.requestId],
+    );
+    const req = requestResult.rows[0];
+    if (!req) {
+      throw new ApiError(404, 'REQUEST_NOT_FOUND', 'Customer deletion request not found or already reviewed.');
+    }
+
+    if (input.decision === 'REJECT') {
+      await client.query(
+        `UPDATE customer_deletion_requests
+         SET request_status = 'REJECTED', reviewed_by = $1, reviewed_at = now(), review_note = $2
+         WHERE request_id = $3`,
+        [input.superAdminUsername, input.reviewNote || null, input.requestId],
+      );
+      await writeAdminAudit(client, {
+        ...input.audit,
+        action: 'CUSTOMER_DELETION_REJECTED',
+        entityType: 'CUSTOMER_DELETION_REQUEST',
+        entityId: input.requestId,
+      });
+      return { success: true, message: 'Customer deletion request rejected.' };
+    }
+
+    // APPROVE -> Hard Cascade Deletion across all tables for customer identity
+    const phoneE164 = req.phone_e164;
+
+    await client.query(`DELETE FROM reward_redemption_requests WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM reward_adjustment_requests WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM reward_ledger WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM customer_reward_balances WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM reward_accounts WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM booking_events WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM bookings WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM customer_sessions WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM customer_auth WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM portal_customer_profiles WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM admin_customer_records WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(`DELETE FROM domain_events WHERE phone_e164 = $1`, [phoneE164]);
+    await client.query(
+      `DELETE FROM admin_audit_logs
+       WHERE entity_id = $1 OR request_id = $1`,
+      [phoneE164],
+    );
+    await client.query(`DELETE FROM customer_subjects WHERE phone_e164 = $1`, [phoneE164]);
+
+    await client.query(
+      `UPDATE customer_deletion_requests
+       SET request_status = 'APPROVED', reviewed_by = $1, reviewed_at = now(), review_note = $2
+       WHERE request_id = $3`,
+      [input.superAdminUsername, input.reviewNote || null, input.requestId],
+    );
+
+    await writeAdminAudit(client, {
+      ...input.audit,
+      action: 'CUSTOMER_HARD_DELETED',
+      entityType: 'CUSTOMER_SUBJECT',
+      entityId: phoneE164,
+    });
+
+    return { success: true, message: `Customer ${req.customer_name} (${phoneE164}) hard deleted permanently.` };
+  });
+}

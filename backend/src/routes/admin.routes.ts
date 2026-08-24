@@ -11,6 +11,8 @@ import {
   getAdminCustomer,
   getAdminOverview,
   listAdminCustomers,
+  requestCustomerDeletion,
+  listPendingCustomerDeletionRequests,
   type AuditContext,
 } from '../services/customer.service';
 import { getUnifiedDashboard, requestRewardAdjustment } from '../services/reward.service';
@@ -260,6 +262,36 @@ adminRouter.post('/send-whatsapp-reward', requireCsrf, async (request, response,
     });
 
     response.status(200).json({ data: { messageId, message: 'WhatsApp reward notification sent successfully.' } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const customerDeletionSchema = z.object({
+  phone: z.string().min(5),
+  reason: z.string().trim().min(3),
+  confirmCode: z.string(),
+});
+
+adminRouter.post('/customers/deletion-requests', requireCsrf, async (request, response, next) => {
+  try {
+    const input = customerDeletionSchema.parse(request.body);
+    const data = await requestCustomerDeletion({
+      phone: input.phone,
+      reason: input.reason,
+      confirmCode: input.confirmCode,
+      audit: auditContext(request),
+    });
+    response.status(200).json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+adminRouter.get('/customers/deletion-requests/pending', async (_request, response, next) => {
+  try {
+    const data = await listPendingCustomerDeletionRequests();
+    response.status(200).json({ data });
   } catch (error) {
     next(error);
   }

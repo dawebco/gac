@@ -168,6 +168,15 @@ export const adminApi = {
       body: { name, phone, bookingType: type, earnedPoints },
     });
   },
+  requestCustomerDeletion({ phone, reason, confirmCode }) {
+    return adminMutation('/admin/customers/deletion-requests', {
+      method: 'POST',
+      body: { phone, reason, confirmCode },
+    });
+  },
+  pendingCustomerDeletions() {
+    return apiRequest('/admin/customers/deletion-requests/pending');
+  },
 };
 
 export const superAdminApi = {
@@ -198,6 +207,13 @@ export const superAdminApi = {
   rewardChangeRequests: status => apiRequest(`/superadmin/reward-change-requests?status=${encodeURIComponent(status || 'PENDING')}`),
   reviewRewardChangeRequest(requestId, decision, reviewNote = '') {
     return superAdminMutation(`/superadmin/reward-change-requests/${requestId}/review`, {
+      method: 'POST',
+      body: { decision, ...(reviewNote.trim() ? { reviewNote: reviewNote.trim() } : {}) },
+    });
+  },
+  customerDeletionRequests: status => apiRequest(`/superadmin/customer-deletion-requests?status=${encodeURIComponent(status || 'PENDING')}`),
+  reviewCustomerDeletionRequest(requestId, decision, reviewNote = '') {
+    return superAdminMutation(`/superadmin/customer-deletion-requests/${requestId}/review`, {
       method: 'POST',
       body: { decision, ...(reviewNote.trim() ? { reviewNote: reviewNote.trim() } : {}) },
     });

@@ -4,7 +4,11 @@ import { requireCsrf, requireSuperAdmin } from '../middleware/admin-auth';
 import { sha256 } from '../shared/crypto';
 import { listRewardAdjustmentRequests, reviewRewardAdjustmentRequest } from '../services/reward.service';
 import { listRewardChangeRequests, reviewRewardChangeRequest } from '../services/reward-catalog.service';
-import type { AuditContext } from '../services/customer.service';
+import {
+  listSuperAdminCustomerDeletionRequests,
+  reviewCustomerDeletionRequest,
+  type AuditContext,
+} from '../services/customer.service';
 
 const statusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'ALL']);
 const reviewSchema = z.object({
@@ -55,6 +59,31 @@ superAdminRouter.post('/reward-change-requests/:requestId/review', requireCsrf, 
     const requestId = z.string().uuid().parse(request.params.requestId);
     const input = reviewSchema.parse(request.body);
     const data = await reviewRewardChangeRequest({
+      requestId,
+      ...input,
+      superAdminUsername: response.locals.admin!.username,
+      audit: auditContext(request),
+    });
+    response.status(200).json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+superAdminRouter.get('/customer-deletion-requests', async (request, response, next) => {
+  try {
+    const status = statusSchema.default('PENDING').parse(request.query.status);
+    response.status(200).json({ data: await listSuperAdminCustomerDeletionRequests(status) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+superAdminRouter.post('/customer-deletion-requests/:requestId/review', requireCsrf, async (request, response, next) => {
+  try {
+    const requestId = z.string().uuid().parse(request.params.requestId);
+    const input = reviewSchema.parse(request.body);
+    const data = await reviewCustomerDeletionRequest({
       requestId,
       ...input,
       superAdminUsername: response.locals.admin!.username,

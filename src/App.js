@@ -3,7 +3,7 @@ import {
   AlertCircle, Award, Bell, Briefcase, Calendar, CheckCircle2, ChevronDown, Download,
   ChevronRight, CircleDollarSign, Eye, EyeOff, Gift, History, Check,
   ImagePlus, LayoutDashboard, Lock, LogOut, Mail, MapPin, Menu, Minus, Phone, Plus,
-  Save, Search, ShieldCheck, Star, Trash2, User, UserRound, Users, WalletCards, X
+  Save, Search, ShieldCheck, Star, Trash2, User, UserRound, Users, UserX, WalletCards, X
 } from 'lucide-react';
 import logoImg from './assets/logo-3.png';
 import './Admin.css';
@@ -463,6 +463,7 @@ function AdminDashboard({ onLogout }) {
     customers: ['Manage Customers', 'Search, review and manage every customer.'],
     rewards: ['Manage Rewards', 'Update reward images and descriptions shown to every customer.'],
     reports: ['Generate Report', 'Filter booking data and prepare a summary.'],
+    delete_customer: ['Delete Customer', 'Search and request deletion of a customer profile.'],
   };
   const navItems = [
     ['dashboard', LayoutDashboard, 'Dashboard'],
@@ -470,6 +471,7 @@ function AdminDashboard({ onLogout }) {
     ['customers', Users, 'Manage Customers'],
     ['rewards', Gift, 'Manage Rewards'],
     ['reports', Briefcase, 'Generate Report'],
+    ['delete_customer', UserX, 'Delete Customer'],
   ];
   const metrics = [
     [User, 'TOTAL CUSTOMERS', overview.totalCustomers.toLocaleString('en-IN'), 'blue'],
@@ -532,6 +534,7 @@ function AdminDashboard({ onLogout }) {
         />
       )} 
       {section === 'reports' && <AdminReportPanel customers={customers}/>}
+      {section === 'delete_customer' && <AdminDeleteCustomerPanel customers={customers} onRefresh={refreshData}/>}
       <aside className="admin-info"><b>i</b><span>Reward points are calculated automatically based on the company's criteria and updated in the system.</span></aside>
     </main>
     {selectedCustomer && <AdminCustomerManager customer={selectedCustomer} onRefresh={async () => { const refreshed = await adminApi.customer(selectedCustomer.phone); setSelectedCustomer(refreshed); await refreshData(); return refreshed; }} onClose={() => setSelectedCustomer(null)}/>} 
@@ -957,6 +960,245 @@ function AdminReportPanel({ customers }) {
   </form>{report && <section className="admin-report-preview" aria-label="Report preview"><header><div><h3>Report Preview</h3><p>Generated {report.generatedAt}</p></div><button type="button" onClick={downloadExcel}><Download size={17}/>Download Excel</button></header><div className="admin-report-result"><div><small>CUSTOMERS</small><strong>{report.customers}</strong></div><div><small>BOOKINGS</small><strong>{report.bookings}</strong></div><div><small>TYPE</small><strong>{report.type}</strong></div><div><small>DATE RANGE</small><strong>{report.range}</strong></div></div><div className="admin-report-table-wrap"><table className="admin-report-table"><thead><tr><th>Customer</th><th>Phone</th><th>Bookings</th><th>Points</th></tr></thead><tbody>{report.rows.map(customer => <tr key={customer.phone}><td><strong>{customer.name}</strong><small>{customer.email}</small></td><td>{customer.phone}</td><td>{customer.bookings}</td><td>{customer.points}</td></tr>)}</tbody></table></div></section>}</section>;
 }
 
+function AdminDeleteCustomerPanel({ customers, onRefresh }) {
+  const [query, setQuery] = useState('');
+  const [targetCustomer, setTargetCustomer] = useState(null);
+  const [reason, setReason] = useState('');
+  const [confirmInput, setConfirmInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [modalError, setModalError] = useState('');
+  const [pendingRequests, setPendingRequests] = useState([]);
+
+  const fetchPending = useCallback(async () => {
+    try {
+      setPendingRequests(await adminApi.pendingCustomerDeletions());
+    } catch (err) {
+      console.error('Failed to load pending deletion requests:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPending();
+  }, [fetchPending]);
+
+  const filteredCustomers = customers.filter(c => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (c.name && c.name.toLowerCase().includes(q)) ||
+      (c.phone && c.phone.includes(q)) ||
+      (c.email && c.email.toLowerCase().includes(q))
+    );
+  });
+
+  const openDeleteModal = customer => {
+    setTargetCustomer(customer);
+    setReason('');
+    setConfirmInput('');
+    setModalError('');
+  };
+
+  const closeDeleteModal = () => {
+    setTargetCustomer(null);
+    setReason('');
+    setConfirmInput('');
+    setModalError('');
+  };
+
+  const handleDeletionSubmit = async event => {
+    event.preventDefault();
+    if (confirmInput.trim() !== 'confirm_delete') {
+      setModalError('You must type exact string "confirm_delete" to submit.');
+      return;
+    }
+    if (reason.trim().length < 3) {
+      setModalError('Please enter a valid reason for deletion.');
+      return;
+    }
+
+    setSubmitting(true);
+    setModalError('');
+    try {
+      await adminApi.requestCustomerDeletion({
+        phone: targetCustomer.phone,
+        reason: reason.trim(),
+        confirmCode: confirmInput.trim(),
+      });
+      // Do NOT show a toast notification upon submission!
+      closeDeleteModal();
+      await fetchPending();
+      if (onRefresh) await onRefresh();
+    } catch (error) {
+      setModalError(error.message || 'Failed to submit deletion request.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return <section className="admin-rewards-manager">
+    <header className="admin-rewards-intro">
+      <i><UserX size={22}/></i>
+      <div>
+        <h2>Delete Customer Profile</h2>
+        <p>Search for a customer to request profile removal. Deletion requests require Super Admin authorization before permanent cascade erasure.</p>
+      </div>
+    </header>
+
+    <div className="admin-search-bar" style={{ marginBottom: '20px' }}>
+      <Search size={18}/>
+      <input
+        type="search"
+        placeholder="Search customer by name or phone number..."
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+      />
+    </div>
+
+    <section className="admin-reward-group">
+      <div className="admin-reward-group-header">
+        <h3>Active Customers ({filteredCustomers.length})</h3>
+      </div>
+      <div className="admin-customers-table-wrap" style={{ overflowX: 'auto' }}>
+        <table className="admin-customers-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th>Bookings</th>
+              <th>Points</th>
+              <th style={{ textAlign: 'right' }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredCustomers.map(c => (
+              <tr key={c.phone}>
+                <td><strong>{c.name}</strong><br/><small>{c.email}</small></td>
+                <td>{c.phone}</td>
+                <td>{c.totalBookings}</td>
+                <td>{c.availablePoints?.toLocaleString('en-IN')} PTS</td>
+                <td style={{ textAlign: 'right' }}>
+                  <button
+                    type="button"
+                    className="admin-secondary-action danger"
+                    onClick={() => openDeleteModal(c)}
+                    style={{ padding: '6px 12px', fontSize: '13px' }}
+                  >
+                    <UserX size={15}/> Delete Customer
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!filteredCustomers.length && (
+              <tr>
+                <td colSpan="5" style={{ textAlign: 'center', padding: '24px' }}>No active customers match your search.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section className="superadmin-requests-card" style={{ marginTop: '32px' }}>
+      <header>
+        <div><span>PENDING DELETION REQUESTS</span><strong>{pendingRequests.length}</strong></div>
+      </header>
+      <div className="superadmin-request-table" role="table" aria-label="Pending customer deletion requests">
+        <div className="superadmin-request-head" role="row">
+          <span>Customer</span>
+          <span>Reason</span>
+          <span>Requested By</span>
+          <span>Date</span>
+          <span>Status</span>
+        </div>
+        {pendingRequests.map(req => (
+          <article className="superadmin-request-row" role="row" key={req.id}>
+            <span data-label="Customer"><b>{req.customerName}</b><small>{req.phoneE164}</small></span>
+            <span data-label="Reason">{req.reason}</span>
+            <span data-label="Requested By">{req.requestedBy}</span>
+            <span data-label="Date">{new Date(req.requestedAt).toLocaleDateString('en-IN')}</span>
+            <span data-label="Status"><em className="pending">Pending</em></span>
+          </article>
+        ))}
+        {!pendingRequests.length && (
+          <div className="admin-empty"><CheckCircle2 size={25}/><span>No pending deletion requests.</span></div>
+        )}
+      </div>
+    </section>
+
+    {targetCustomer && (
+      <div className="admin-modal-backdrop" style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px'
+      }}>
+        <div className="admin-modal-card" style={{
+          backgroundColor: '#fff', borderRadius: '12px', padding: '24px',
+          maxWidth: '480px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+        }}>
+          <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, color: '#dc2626', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertCircle size={20}/> Confirm Customer Deletion Request
+            </h3>
+            <button type="button" onClick={closeDeleteModal} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+              <X size={20}/>
+            </button>
+          </header>
+
+          <form onSubmit={handleDeletionSubmit}>
+            <p style={{ fontSize: '14px', color: '#475569', marginBottom: '16px' }}>
+              You are requesting deletion for customer <strong>{targetCustomer.name}</strong> (<code>+91 {targetCustomer.phone}</code>). This will be routed to Super Admin for approval.
+            </p>
+
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#1e293b', marginBottom: '6px' }}>
+              Reason for Deletion
+              <textarea
+                rows="3"
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                placeholder="Enter detailed reason for deletion request..."
+                required
+                style={{ width: '100%', marginTop: '4px', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+              />
+            </label>
+
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#1e293b', marginTop: '12px', marginBottom: '6px' }}>
+              Type <code style={{ color: '#dc2626' }}>confirm_delete</code> to unlock submission:
+              <input
+                type="text"
+                value={confirmInput}
+                onChange={e => setConfirmInput(e.target.value)}
+                placeholder="confirm_delete"
+                required
+                style={{ width: '100%', marginTop: '4px', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+              />
+            </label>
+
+            {modalError && (
+              <div className="admin-login-error" role="alert" style={{ marginTop: '12px', marginBottom: '12px' }}>
+                <AlertCircle size={15}/>{modalError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
+              <button type="button" className="admin-secondary-action" onClick={closeDeleteModal}>
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="admin-secondary-action danger"
+                disabled={submitting || confirmInput.trim() !== 'confirm_delete' || reason.trim().length < 3}
+                style={{ opacity: confirmInput.trim() === 'confirm_delete' && reason.trim().length >= 3 ? 1 : 0.5 }}
+              >
+                {submitting ? 'Submitting…' : 'Submit Deletion Request'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+  </section>;
+}
+
 function SuperAdminPortal() {
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -1010,6 +1252,10 @@ function SuperAdminDashboard({ onLogout }) {
   const [rewardChangeRequests, setRewardChangeRequests] = useState([]);
   const [changeBusyId, setChangeBusyId] = useState('');
 
+  const [deletionStatus, setDeletionStatus] = useState('PENDING');
+  const [deletionRequests, setDeletionRequests] = useState([]);
+  const [deletionBusyId, setDeletionBusyId] = useState('');
+
   const refreshRequests = useCallback(async () => {
     try {
       setRequests(await superAdminApi.rewardRequests(status));
@@ -1027,19 +1273,33 @@ function SuperAdminDashboard({ onLogout }) {
     }
   }, [rewardChangeStatus]);
 
+  const refreshDeletionRequests = useCallback(async () => {
+    try {
+      setDeletionRequests(await superAdminApi.customerDeletionRequests(deletionStatus));
+    } catch (error) {
+      console.error('Failed to fetch customer deletion requests:', error);
+    }
+  }, [deletionStatus]);
+
   useEffect(() => {
     refreshRequests();
     refreshRewardChangeRequests();
+    refreshDeletionRequests();
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         refreshRequests();
         refreshRewardChangeRequests();
+        refreshDeletionRequests();
       }
     }, 30000);
-    const refreshOnFocus = () => { refreshRequests(); refreshRewardChangeRequests(); };
+    const refreshOnFocus = () => {
+      refreshRequests();
+      refreshRewardChangeRequests();
+      refreshDeletionRequests();
+    };
     window.addEventListener('focus', refreshOnFocus);
     return () => { window.clearInterval(timer); window.removeEventListener('focus', refreshOnFocus); };
-  }, [refreshRequests, refreshRewardChangeRequests]);
+  }, [refreshRequests, refreshRewardChangeRequests, refreshDeletionRequests]);
 
   const review = async (request, decision) => {
     setBusyId(request.id);
@@ -1073,16 +1333,32 @@ function SuperAdminDashboard({ onLogout }) {
     }
   };
 
+  const reviewDeletion = async (request, decision) => {
+    setDeletionBusyId(request.id);
+    setFeedback('');
+    try {
+      await superAdminApi.reviewCustomerDeletionRequest(request.id, decision);
+      setFeedback(decision === 'APPROVE'
+        ? `Customer ${request.customerName} (${request.phoneE164}) hard deleted permanently.`
+        : `Deletion request for ${request.customerName} rejected.`);
+      await refreshDeletionRequests();
+    } catch (error) {
+      setDataError(error.message || 'Unable to review customer deletion request.');
+    } finally {
+      setDeletionBusyId('');
+    }
+  };
+
   return <div className="admin-shell superadmin-shell">
     <header className="admin-mobile-bar"><img src={logoImg} alt="GAC Holidays"/><button type="button" onClick={() => setSidebarOpen(true)} aria-label="Open super-admin menu"><Menu size={27}/></button></header>
     <button className={`admin-sidebar-backdrop ${sidebarOpen ? 'visible' : ''}`} type="button" onClick={() => setSidebarOpen(false)} aria-label="Close super-admin menu"/>
     <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
       <div className="admin-sidebar-brand"><div><b><span>GAC</span>Holidays</b><small>POINTS SYSTEM</small></div><button type="button" onClick={() => setSidebarOpen(false)} aria-label="Close super-admin menu"><X size={22}/></button></div>
-      <nav aria-label="Super-admin navigation"><button type="button" className="active" onClick={() => setSidebarOpen(false)}><LayoutDashboard size={19}/><span>Dashboard</span></button><small className="superadmin-nav-detail">Manage point &amp; reward requests</small></nav>
+      <nav aria-label="Super-admin navigation"><button type="button" className="active" onClick={() => setSidebarOpen(false)}><LayoutDashboard size={19}/><span>Dashboard</span></button><small className="superadmin-nav-detail">Manage point, reward &amp; deletion requests</small></nav>
       <button type="button" className="admin-sidebar-logout" onClick={onLogout}><LogOut size={19}/><span>Logout</span></button>
     </aside>
     <main className="admin-main">
-      <header className="admin-workspace-header"><div><h1>Requests</h1><p>Review manual reward-point changes and reward catalog edit requests.</p></div><div className="admin-profile-wrap"><button className="admin-profile" onClick={() => setProfileOpen(value => !value)} aria-expanded={profileOpen}><i><User size={18}/></i><span><b>Super Admin</b><small>SYSTEM ADMINISTRATOR</small></span><ChevronDown size={16}/></button>{profileOpen && <div className="admin-profile-menu"><button onClick={onLogout}><LogOut size={15}/>Log out</button></div>}</div></header>
+      <header className="admin-workspace-header"><div><h1>Requests</h1><p>Review manual reward-point changes, reward catalog edit requests, and customer profile deletions.</p></div><div className="admin-profile-wrap"><button className="admin-profile" onClick={() => setProfileOpen(value => !value)} aria-expanded={profileOpen}><i><User size={18}/></i><span><b>Super Admin</b><small>SYSTEM ADMINISTRATOR</small></span><ChevronDown size={16}/></button>{profileOpen && <div className="admin-profile-menu"><button onClick={onLogout}><LogOut size={15}/>Log out</button></div>}</div></header>
       {dataError && <div className="admin-login-error superadmin-error" role="alert"><AlertCircle size={15}/>{dataError}</div>}
       {feedback && <div className="superadmin-feedback" role="status"><CheckCircle2 size={16}/>{feedback}</div>}
 
@@ -1118,7 +1394,22 @@ function SuperAdminDashboard({ onLogout }) {
         </div>
       </section>
 
-      <aside className="admin-info" style={{ marginTop: '24px' }}><b>i</b><span>Approve only verified requests. Catalog changes apply immediately after approval; rejected requests leave the catalog unchanged.</span></aside>
+      <section className="superadmin-requests-card" style={{ marginTop: '24px' }}>
+        <header><div><span>CUSTOMER DELETION REQUESTS</span><strong>{deletionRequests.length}</strong></div><nav aria-label="Customer deletion status filter">{['PENDING', 'APPROVED', 'REJECTED'].map(filter => <button type="button" key={filter} className={deletionStatus === filter ? 'active' : ''} onClick={() => { setDeletionStatus(filter); setFeedback(''); }}>{filter.charAt(0) + filter.slice(1).toLowerCase()}</button>)}</nav></header>
+        <div className="superadmin-request-table" role="table" aria-label={`${deletionStatus.toLowerCase()} customer deletion requests`}>
+          <div className="superadmin-request-head" role="row"><span>Customer</span><span>Reason</span><span>Requested By</span><span>Date</span><span>Action</span></div>
+          {deletionRequests.map(request => <article className="superadmin-request-row" role="row" key={request.id}>
+            <span data-label="Customer"><b>{request.customerName}</b><small>{request.phoneE164}</small></span>
+            <span data-label="Reason">{request.reason}</span>
+            <span data-label="Requested By">{request.requestedBy}</span>
+            <span data-label="Date">{new Date(request.requestedAt).toLocaleDateString('en-IN')}</span>
+            <span data-label="Action" className="superadmin-request-actions">{request.status === 'PENDING' ? <><button type="button" className="approve" disabled={deletionBusyId === request.id} onClick={() => reviewDeletion(request, 'APPROVE')}>Approve</button><button type="button" className="reject" disabled={deletionBusyId === request.id} onClick={() => reviewDeletion(request, 'REJECT')}>Reject</button></> : <em className={request.status.toLowerCase()}>{request.status}</em>}</span>
+          </article>)}
+          {!deletionRequests.length && <div className="admin-empty"><CheckCircle2 size={25}/><span>No {deletionStatus.toLowerCase()} customer deletion requests.</span></div>}
+        </div>
+      </section>
+
+      <aside className="admin-info" style={{ marginTop: '24px' }}><b>i</b><span>Approve only verified requests. Approving a deletion permanently erases all customer records across all systems.</span></aside>
     </main>
   </div>;
 }
