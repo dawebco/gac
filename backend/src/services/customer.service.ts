@@ -416,22 +416,27 @@ export async function reviewCustomerDeletionRequest(input: {
     }
 
     // APPROVE -> Hard Cascade Deletion across all tables for customer identity
+    // Copy the request details before deleting the request record to avoid foreign key issues
+    const requestId = input.requestId;
     const phoneE164 = req.phone_e164;
+    const customerName = req.customer_name;
+
+    // Log the deletion of the request (for audit)
+    await writeAdminAudit(client, {
+      ...input.audit,
+      action: 'CUSTOMER_DELETION_REQUEST_DELETED',
+      entityType: 'CUSTOMER_DELETION_REQUEST',
+      entityId: requestId,
+    });
+
+    // Delete the deletion request record to remove the foreign key obstacle
+    await client.query(
+      `DELETE FROM customer_deletion_requests WHERE request_id = $1`,
+      [requestId]
+    );
 
     try {
-      // Step A: Mark request as APPROVED first
-      console.log(`[Delete Cascade] Step A: Updating request status to APPROVED for request ${input.requestId}`);
-      await client.query(
-        `UPDATE customer_deletion_requests
-         SET request_status = 'APPROVED', reviewed_by = $1, reviewed_at = now(), review_note = $2
-         WHERE request_id = $3`,
-        [input.superAdminUsername, input.reviewNote || null, input.requestId],
-      );
-
-      console.log(`[Delete Cascade] Step B & C: Starting hard purge for phone: ${phoneE164}`);
-
-      // Drop potential foreign key constraint on customer_deletion_requests if present
-      await client.query(`ALTER TABLE customer_deletion_requests DROP CONSTRAINT IF EXISTS customer_deletion_requests_phone_e164_fkey`);
+      console.log(`[Delete Cascade] Starting hard purge for phone: ${phoneE164}`);
 
       // 1. Purge reward_redemption_requests, reward_adjustment_requests, reward_change_requests
       console.log('[Delete Cascade] Purging reward redemption requests...');
@@ -480,6 +485,10 @@ export async function reviewCustomerDeletionRequest(input: {
 
       console.log('[Delete Cascade] Purging reward accounts...');
       await client.query(`DELETE FROM reward_accounts WHERE phone_e164 = $1`, [phoneE164]);
+
+      // 3.5. Customer dashboard summary
+      console.log('[Delete Cascade] Purging customer dashboard summary...');
+      await client.query(`DELETE FROM customer_dashboard_summary WHERE phone_e164 = $1`, [phoneE164]);
 
       // 4. Booking events & bookings
       console.log('[Delete Cascade] Purging booking events...');
@@ -540,9 +549,11 @@ export async function reviewCustomerDeletionRequest(input: {
         action: 'CUSTOMER_HARD_DELETED',
         entityType: 'CUSTOMER_SUBJECT',
         entityId: phoneE164,
+        // Optionally, we can add the requestId and customerName to the audit log afterData
+        // but the audit service might not support extra fields. We'll keep it as is.
       });
 
-      return { success: true, message: `Customer ${req.customer_name} (${phoneE164}) hard deleted permanently.` };
+      return { success: true, message: `Customer ${customerName} (${phoneE164}) hard deleted permanently.` };
     } catch (cascadeErr: any) {
       console.error('[Delete Cascade Error Details]', {
         message: cascadeErr?.message,
