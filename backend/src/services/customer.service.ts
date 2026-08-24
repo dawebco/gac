@@ -1,5 +1,6 @@
 import { PoolClient } from 'pg';
 import { query, withTransaction } from '../database/postgres';
+import { supabaseAdmin } from '../database/supabase';
 import { ApiError } from '../shared/api-error';
 import { normalizeIndianPhone, nationalPhone } from '../shared/phone';
 import { writeAdminAudit } from './audit.service';
@@ -418,7 +419,8 @@ export async function reviewCustomerDeletionRequest(input: {
     const phoneE164 = req.phone_e164;
 
     try {
-      // Mark the request as APPROVED first so the request status reflects approval
+      // Step A: Mark request as APPROVED first
+      console.log(`[Delete Cascade] Step A: Updating request status to APPROVED for request ${input.requestId}`);
       await client.query(
         `UPDATE customer_deletion_requests
          SET request_status = 'APPROVED', reviewed_by = $1, reviewed_at = now(), review_note = $2
@@ -426,11 +428,13 @@ export async function reviewCustomerDeletionRequest(input: {
         [input.superAdminUsername, input.reviewNote || null, input.requestId],
       );
 
-      console.log(`[Delete Cascade] Starting hard delete for customer: ${phoneE164}`);
+      console.log(`[Delete Cascade] Step B & C: Starting hard purge for phone: ${phoneE164}`);
 
-      // 1. Redemption & reward requests (reference reward_accounts & reward_ledger via FK)
-      // Delete any redemption requests by this phone number OR pointing to this customer's ledger entries
-      console.log('[Delete Cascade] Deleting reward redemption requests...');
+      // Drop potential foreign key constraint on customer_deletion_requests if present
+      await client.query(`ALTER TABLE customer_deletion_requests DROP CONSTRAINT IF EXISTS customer_deletion_requests_phone_e164_fkey`);
+
+      // 1. Purge reward_redemption_requests, reward_adjustment_requests, reward_change_requests
+      console.log('[Delete Cascade] Purging reward redemption requests...');
       await client.query(
         `DELETE FROM reward_redemption_requests
          WHERE phone_e164 = $1
@@ -438,8 +442,7 @@ export async function reviewCustomerDeletionRequest(input: {
         [phoneE164],
       );
 
-      // Delete any adjustment requests by this phone number OR pointing to this customer's ledger entries
-      console.log('[Delete Cascade] Deleting reward adjustment requests...');
+      console.log('[Delete Cascade] Purging reward adjustment requests...');
       await client.query(
         `DELETE FROM reward_adjustment_requests
          WHERE phone_e164 = $1
@@ -447,7 +450,13 @@ export async function reviewCustomerDeletionRequest(input: {
         [phoneE164],
       );
 
-      // 2. Reward ledger — CRITICAL: NULL out reversal_of self-references pointing to OR from this customer
+      console.log('[Delete Cascade] Checking reward change requests...');
+      await client.query(
+        `DELETE FROM reward_change_requests WHERE requested_by = $1`,
+        [phoneE164],
+      );
+
+      // 2. Reward ledger — NULL reversal_of self-references FIRST, then DELETE
       console.log('[Delete Cascade] Nulling reward_ledger reversal_of self-references...');
       await client.query(
         `UPDATE reward_ledger
@@ -457,8 +466,7 @@ export async function reviewCustomerDeletionRequest(input: {
         [phoneE164],
       );
 
-      // Delete reward ledger entries for this customer OR referencing this customer's bookings
-      console.log('[Delete Cascade] Deleting reward ledger entries...');
+      console.log('[Delete Cascade] Purging reward ledger entries...');
       await client.query(
         `DELETE FROM reward_ledger
          WHERE phone_e164 = $1
@@ -466,17 +474,15 @@ export async function reviewCustomerDeletionRequest(input: {
         [phoneE164],
       );
 
-      // 3. Balance snapshot (references reward_accounts)
-      console.log('[Delete Cascade] Deleting customer reward balances...');
+      // 3. Customer reward balances & reward accounts
+      console.log('[Delete Cascade] Purging customer reward balances...');
       await client.query(`DELETE FROM customer_reward_balances WHERE phone_e164 = $1`, [phoneE164]);
 
-      // 4. Reward account root (parent of ledger/balances)
-      console.log('[Delete Cascade] Deleting reward account...');
+      console.log('[Delete Cascade] Purging reward accounts...');
       await client.query(`DELETE FROM reward_accounts WHERE phone_e164 = $1`, [phoneE164]);
 
-      // 5. Booking events (reference bookings + customer_subjects)
-      // Delete booking events for this customer OR for this customer's bookings
-      console.log('[Delete Cascade] Deleting booking events...');
+      // 4. Booking events & bookings
+      console.log('[Delete Cascade] Purging booking events...');
       await client.query(
         `DELETE FROM booking_events
          WHERE phone_e164 = $1
@@ -484,41 +490,50 @@ export async function reviewCustomerDeletionRequest(input: {
         [phoneE164],
       );
 
-      // 6. Bookings (reference customer_subjects)
-      console.log('[Delete Cascade] Deleting bookings...');
+      console.log('[Delete Cascade] Purging bookings...');
       await client.query(`DELETE FROM bookings WHERE phone_e164 = $1`, [phoneE164]);
 
-      // 7. Sessions (reference customer_auth)
-      console.log('[Delete Cascade] Deleting customer sessions...');
+      // 5. Customer auth & sessions
+      console.log('[Delete Cascade] Purging customer sessions...');
       await client.query(`DELETE FROM customer_sessions WHERE phone_e164 = $1`, [phoneE164]);
 
-      // 8. Auth record (references customer_subjects)
-      console.log('[Delete Cascade] Deleting customer auth record...');
+      console.log('[Delete Cascade] Purging customer auth...');
       await client.query(`DELETE FROM customer_auth WHERE phone_e164 = $1`, [phoneE164]);
 
-      // 9. Portal profile (references customer_subjects)
-      console.log('[Delete Cascade] Deleting portal customer profile...');
+      // 6. Profiles & customer records
+      console.log('[Delete Cascade] Purging portal customer profiles...');
       await client.query(`DELETE FROM portal_customer_profiles WHERE phone_e164 = $1`, [phoneE164]);
 
-      // 10. Admin customer record (references customer_subjects)
-      console.log('[Delete Cascade] Deleting admin customer record...');
+      console.log('[Delete Cascade] Purging admin customer records...');
       await client.query(`DELETE FROM admin_customer_records WHERE phone_e164 = $1`, [phoneE164]);
 
-      // 11. Domain events and audit logs
-      console.log('[Delete Cascade] Deleting domain events...');
+      // 7. Domain events & audit logs
+      console.log('[Delete Cascade] Purging domain events...');
       await client.query(`DELETE FROM domain_events WHERE phone_e164 = $1`, [phoneE164]);
 
-      console.log('[Delete Cascade] Deleting admin audit logs for this entity...');
+      console.log('[Delete Cascade] Purging admin audit logs for this customer...');
       await client.query(
         `DELETE FROM admin_audit_logs WHERE entity_id = $1 OR request_id = $1`,
         [phoneE164],
       );
 
-      // 12. Root identity anchor — must be last (all child FKs reference this)
-      console.log('[Delete Cascade] Deleting customer_subjects root record...');
+      // 8. Root identity anchor — MUST BE LAST
+      console.log('[Delete Cascade] Purging customer_subjects root record...');
       await client.query(`DELETE FROM customer_subjects WHERE phone_e164 = $1`, [phoneE164]);
 
-      console.log(`[Delete Cascade] Hard delete complete for customer: ${phoneE164}`);
+      console.log(`[Delete Cascade] Database hard purge completed for: ${phoneE164}`);
+
+      // 9. Safe Supabase Auth User Cleanup
+      try {
+        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
+        const authUser = usersData?.users?.find(u => u.phone === phoneE164 || u.user_metadata?.phone_e164 === phoneE164);
+        if (authUser?.id) {
+          await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+          console.log(`[Delete Cascade] Supabase Auth user ${authUser.id} deleted.`);
+        }
+      } catch (supabaseAuthErr) {
+        console.warn('[Delete Cascade Warning] Supabase Auth cleanup non-fatal warning:', supabaseAuthErr);
+      }
 
       await writeAdminAudit(client, {
         ...input.audit,
@@ -528,8 +543,14 @@ export async function reviewCustomerDeletionRequest(input: {
       });
 
       return { success: true, message: `Customer ${req.customer_name} (${phoneE164}) hard deleted permanently.` };
-    } catch (cascadeErr) {
-      console.error('[Delete Cascade Error]', cascadeErr);
+    } catch (cascadeErr: any) {
+      console.error('[Delete Cascade Error Details]', {
+        message: cascadeErr?.message,
+        table: cascadeErr?.table,
+        detail: cascadeErr?.detail,
+        constraint: cascadeErr?.constraint,
+        code: cascadeErr?.code,
+      });
       throw cascadeErr;
     }
   });

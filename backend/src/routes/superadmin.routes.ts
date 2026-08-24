@@ -79,7 +79,7 @@ superAdminRouter.get('/customer-deletion-requests', async (request, response, ne
   }
 });
 
-superAdminRouter.post('/customer-deletion-requests/:requestId/review', requireCsrf, async (request, response, next) => {
+superAdminRouter.post('/customer-deletion-requests/:requestId/review', requireCsrf, async (request, response) => {
   try {
     const requestId = z.string().uuid().parse(request.params.requestId);
     const input = reviewSchema.parse(request.body);
@@ -90,7 +90,14 @@ superAdminRouter.post('/customer-deletion-requests/:requestId/review', requireCs
       audit: auditContext(request),
     });
     response.status(200).json({ data });
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.error('[Customer Deletion Review Route Error]', error);
+    response.status(500).json({
+      error: error?.message || String(error),
+      detail: error?.detail || error?.stack || 'No additional stack detail',
+      table: error?.table || null,
+      code: error?.code || null,
+      constraint: error?.constraint || null,
+    });
   }
 });
