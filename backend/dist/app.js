@@ -99839,8 +99839,8 @@ portalRouter.post("/customers/register", async (request, response) => {
     listRewards(),
     listCustomerRedemptions(registration.profile.phoneE164)
   ]);
-  const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED");
-  const pendingRedemptions = redemptions.filter((r) => r.status === "PENDING");
+  const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED" || r.status === "REJECTED");
+  const pendingRedemptions = [];
   setCustomerSessionCookie(response, registration.sessionToken);
   response.status(201).json({ data: { profile: registration.profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
 });
@@ -99887,8 +99887,8 @@ portalRouter.post("/auth/verify-otp", async (request, response, next) => {
       listRewards(),
       listCustomerRedemptions(login.profile.phoneE164)
     ]);
-    const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED");
-    const pendingRedemptions = redemptions.filter((r) => r.status === "PENDING");
+    const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED" || r.status === "REJECTED");
+    const pendingRedemptions = [];
     setCustomerSessionCookie(response, login.sessionToken);
     response.status(200).json({ data: { profile: login.profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
   } catch (error51) {
@@ -99911,8 +99911,8 @@ portalRouter.post("/auth/dummy-login", async (request, response) => {
     listRewards(),
     listCustomerRedemptions(login.profile.phoneE164)
   ]);
-  const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED");
-  const pendingRedemptions = redemptions.filter((r) => r.status === "PENDING");
+  const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED" || r.status === "REJECTED");
+  const pendingRedemptions = [];
   setCustomerSessionCookie(response, login.sessionToken);
   response.status(200).json({ data: { profile: login.profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
 });
@@ -99925,8 +99925,8 @@ portalRouter.get("/session/dashboard", requireCustomer, async (_request, respons
     listRewards(),
     listCustomerRedemptions(phoneE164)
   ]);
-  const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED");
-  const pendingRedemptions = redemptions.filter((r) => r.status === "PENDING");
+  const redeemedRewards = redemptions.filter((r) => r.status === "APPROVED" || r.status === "REJECTED");
+  const pendingRedemptions = [];
   response.status(200).json({ data: { profile, dashboard, bookings, rewards, redeemedRewards, pendingRedemptions } });
 });
 portalRouter.post("/session/logout", requireCustomer, async (_request, response) => {
