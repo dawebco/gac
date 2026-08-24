@@ -729,15 +729,15 @@ function AdminRewardsPanel({ rewards: rewardItems, onSaved, onCreated, onDeleted
       const defaultTitle = category === 'FEATURED' ? 'New Available Reward' : 'New Reward Milestone';
       const defaultDesc = category === 'FEATURED' ? 'Description for this reward card.' : 'Milestone reward experience details.';
       const defaultPoints = category === 'FEATURED' ? 500 : 50000;
-      const created = await adminApi.createReward({
+      const res = await adminApi.createReward({
         title: defaultTitle,
         description: defaultDesc,
         pointsRequired: defaultPoints,
         category,
       });
-      if (onCreated) await onCreated(created);
-      setFeedback({ type: 'success', text: `Added new ${category === 'FEATURED' ? 'available reward' : 'milestone'} card successfully.` });
-      setTimeout(() => setFeedback({ type: '', text: '' }), 4000);
+      if (onCreated && res && !res.message) await onCreated(res);
+      setFeedback({ type: 'success', text: res?.message || 'Change request submitted to Super Admin for approval.' });
+      setTimeout(() => setFeedback({ type: '', text: '' }), 5000);
     } catch (error) {
       setFeedback({ type: 'error', text: error.message || 'Unable to add reward card.' });
     } finally {
@@ -750,7 +750,7 @@ function AdminRewardsPanel({ rewards: rewardItems, onSaved, onCreated, onDeleted
       <i><Gift size={22}/></i>
       <div>
         <h2>Customer Reward Catalog</h2>
-        <p>Upload a clearer image or edit the card copy and points. Saved changes appear on every customer dashboard.</p>
+        <p>Upload a clearer image or edit the card copy and points. Proposed changes require Super Admin authorization before updating the live catalog.</p>
       </div>
       <div className="admin-rewards-top-actions">
         <button
@@ -851,15 +851,14 @@ function AdminRewardEditor({ reward, onSaved, onDeleted, onRefresh }) {
     setSaving(true);
     setMessage('');
     try {
-      const updated = await adminApi.updateReward(reward.id, {
+      const res = await adminApi.updateReward(reward.id, {
         title: title.trim(),
         description: description.trim(),
         pointsRequired: points,
         image,
       });
-      if (onSaved) await onSaved(updated);
       setImage(null);
-      setMessage('Saved successfully.');
+      setMessage(res?.message || 'Change request submitted to Super Admin for approval.');
     } catch (error) {
       setMessage(error.message || 'Unable to save this reward.');
     } finally {
@@ -868,14 +867,15 @@ function AdminRewardEditor({ reward, onSaved, onDeleted, onRefresh }) {
   };
 
   const remove = async () => {
-    if (!window.confirm(`Are you sure you want to remove the "${title}" reward card?`)) return;
+    if (!window.confirm(`Are you sure you want to request deletion for "${title}"?`)) return;
     setDeleting(true);
     setMessage('');
     try {
-      await adminApi.deleteReward(reward.id);
-      if (onDeleted) await onDeleted(reward.id);
+      const res = await adminApi.deleteReward(reward.id);
+      setMessage(res?.message || 'Change request submitted to Super Admin for approval.');
     } catch (error) {
       setMessage(error.message || 'Unable to remove this reward.');
+    } finally {
       setDeleting(false);
     }
   };
@@ -916,7 +916,7 @@ function AdminRewardEditor({ reward, onSaved, onDeleted, onRefresh }) {
           <Trash2 size={16}/>{deleting ? 'Removing…' : 'Remove'}
         </button>
       </div>
-      {message && <small className={message.startsWith('Saved') ? 'success' : ''}>{message}</small>}
+      {message && <small className={message.includes('Super Admin') || message.startsWith('Saved') ? 'success' : ''}>{message}</small>}
     </div>
   </form>;
 }
@@ -1006,6 +1006,10 @@ function SuperAdminDashboard({ onLogout }) {
   const [feedback, setFeedback] = useState('');
   const [dataError, setDataError] = useState('');
 
+  const [rewardChangeStatus, setRewardChangeStatus] = useState('PENDING');
+  const [rewardChangeRequests, setRewardChangeRequests] = useState([]);
+  const [changeBusyId, setChangeBusyId] = useState('');
+
   const refreshRequests = useCallback(async () => {
     try {
       setRequests(await superAdminApi.rewardRequests(status));
@@ -1015,15 +1019,27 @@ function SuperAdminDashboard({ onLogout }) {
     }
   }, [status]);
 
+  const refreshRewardChangeRequests = useCallback(async () => {
+    try {
+      setRewardChangeRequests(await superAdminApi.rewardChangeRequests(rewardChangeStatus));
+    } catch (error) {
+      console.error('Failed to fetch reward change requests:', error);
+    }
+  }, [rewardChangeStatus]);
+
   useEffect(() => {
     refreshRequests();
+    refreshRewardChangeRequests();
     const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') refreshRequests();
+      if (document.visibilityState === 'visible') {
+        refreshRequests();
+        refreshRewardChangeRequests();
+      }
     }, 30000);
-    const refreshOnFocus = () => refreshRequests();
+    const refreshOnFocus = () => { refreshRequests(); refreshRewardChangeRequests(); };
     window.addEventListener('focus', refreshOnFocus);
     return () => { window.clearInterval(timer); window.removeEventListener('focus', refreshOnFocus); };
-  }, [refreshRequests]);
+  }, [refreshRequests, refreshRewardChangeRequests]);
 
   const review = async (request, decision) => {
     setBusyId(request.id);
@@ -1041,18 +1057,35 @@ function SuperAdminDashboard({ onLogout }) {
     }
   };
 
+  const reviewRewardChange = async (request, decision) => {
+    setChangeBusyId(request.id);
+    setFeedback('');
+    try {
+      await superAdminApi.reviewRewardChangeRequest(request.id, decision);
+      setFeedback(decision === 'APPROVE'
+        ? `Reward change request for "${request.rewardName}" approved and applied to catalog.`
+        : `Reward change request for "${request.rewardName}" rejected.`);
+      await refreshRewardChangeRequests();
+    } catch (error) {
+      setDataError(error.message || 'Unable to review reward change request.');
+    } finally {
+      setChangeBusyId('');
+    }
+  };
+
   return <div className="admin-shell superadmin-shell">
     <header className="admin-mobile-bar"><img src={logoImg} alt="GAC Holidays"/><button type="button" onClick={() => setSidebarOpen(true)} aria-label="Open super-admin menu"><Menu size={27}/></button></header>
     <button className={`admin-sidebar-backdrop ${sidebarOpen ? 'visible' : ''}`} type="button" onClick={() => setSidebarOpen(false)} aria-label="Close super-admin menu"/>
     <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
       <div className="admin-sidebar-brand"><div><b><span>GAC</span>Holidays</b><small>POINTS SYSTEM</small></div><button type="button" onClick={() => setSidebarOpen(false)} aria-label="Close super-admin menu"><X size={22}/></button></div>
-      <nav aria-label="Super-admin navigation"><button type="button" className="active" onClick={() => setSidebarOpen(false)}><LayoutDashboard size={19}/><span>Dashboard</span></button><small className="superadmin-nav-detail">Manage point requests</small></nav>
+      <nav aria-label="Super-admin navigation"><button type="button" className="active" onClick={() => setSidebarOpen(false)}><LayoutDashboard size={19}/><span>Dashboard</span></button><small className="superadmin-nav-detail">Manage point &amp; reward requests</small></nav>
       <button type="button" className="admin-sidebar-logout" onClick={onLogout}><LogOut size={19}/><span>Logout</span></button>
     </aside>
     <main className="admin-main">
-      <header className="admin-workspace-header"><div><h1>Requests</h1><p>Review manual reward-point changes submitted by administrators.</p></div><div className="admin-profile-wrap"><button className="admin-profile" onClick={() => setProfileOpen(value => !value)} aria-expanded={profileOpen}><i><User size={18}/></i><span><b>Super Admin</b><small>SYSTEM ADMINISTRATOR</small></span><ChevronDown size={16}/></button>{profileOpen && <div className="admin-profile-menu"><button onClick={onLogout}><LogOut size={15}/>Log out</button></div>}</div></header>
+      <header className="admin-workspace-header"><div><h1>Requests</h1><p>Review manual reward-point changes and reward catalog edit requests.</p></div><div className="admin-profile-wrap"><button className="admin-profile" onClick={() => setProfileOpen(value => !value)} aria-expanded={profileOpen}><i><User size={18}/></i><span><b>Super Admin</b><small>SYSTEM ADMINISTRATOR</small></span><ChevronDown size={16}/></button>{profileOpen && <div className="admin-profile-menu"><button onClick={onLogout}><LogOut size={15}/>Log out</button></div>}</div></header>
       {dataError && <div className="admin-login-error superadmin-error" role="alert"><AlertCircle size={15}/>{dataError}</div>}
       {feedback && <div className="superadmin-feedback" role="status"><CheckCircle2 size={16}/>{feedback}</div>}
+
       <section className="superadmin-requests-card">
         <header><div><span>POINTS REQUESTS</span><strong>{requests.length}</strong></div><nav aria-label="Request status filter">{['PENDING', 'APPROVED', 'REJECTED'].map(filter => <button type="button" key={filter} className={status === filter ? 'active' : ''} onClick={() => { setStatus(filter); setFeedback(''); }}>{filter.charAt(0) + filter.slice(1).toLowerCase()}</button>)}</nav></header>
         <div className="superadmin-request-table" role="table" aria-label={`${status.toLowerCase()} reward point requests`}>
@@ -1069,7 +1102,23 @@ function SuperAdminDashboard({ onLogout }) {
           {!requests.length && <div className="admin-empty"><CheckCircle2 size={25}/><span>No {status.toLowerCase()} point requests.</span></div>}
         </div>
       </section>
-      <aside className="admin-info"><b>i</b><span>Approve only verified requests. Points change immediately after approval; rejected requests never affect the customer balance.</span></aside>
+
+      <section className="superadmin-requests-card" style={{ marginTop: '24px' }}>
+        <header><div><span>REWARD CHANGES</span><strong>{rewardChangeRequests.length}</strong></div><nav aria-label="Reward change status filter">{['PENDING', 'APPROVED', 'REJECTED'].map(filter => <button type="button" key={filter} className={rewardChangeStatus === filter ? 'active' : ''} onClick={() => { setRewardChangeStatus(filter); setFeedback(''); }}>{filter.charAt(0) + filter.slice(1).toLowerCase()}</button>)}</nav></header>
+        <div className="superadmin-request-table" role="table" aria-label={`${rewardChangeStatus.toLowerCase()} reward change requests`}>
+          <div className="superadmin-request-head" role="row"><span>Reward Name</span><span>Changes Made</span><span>Requested By</span><span>Date</span><span>Action</span></div>
+          {rewardChangeRequests.map(request => <article className="superadmin-request-row" role="row" key={request.id}>
+            <span data-label="Reward Name"><b>{request.rewardName}</b></span>
+            <span data-label="Changes Made">{request.changesSummary}</span>
+            <span data-label="Requested By">{request.requestedBy}</span>
+            <span data-label="Date">{new Date(request.requestedAt).toLocaleDateString('en-IN')}</span>
+            <span data-label="Action" className="superadmin-request-actions">{request.status === 'PENDING' ? <><button type="button" className="approve" disabled={changeBusyId === request.id} onClick={() => reviewRewardChange(request, 'APPROVE')}>Approve</button><button type="button" className="reject" disabled={changeBusyId === request.id} onClick={() => reviewRewardChange(request, 'REJECT')}>Reject</button></> : <em className={request.status.toLowerCase()}>{request.status}</em>}</span>
+          </article>)}
+          {!rewardChangeRequests.length && <div className="admin-empty"><CheckCircle2 size={25}/><span>No {rewardChangeStatus.toLowerCase()} reward change requests.</span></div>}
+        </div>
+      </section>
+
+      <aside className="admin-info" style={{ marginTop: '24px' }}><b>i</b><span>Approve only verified requests. Catalog changes apply immediately after approval; rejected requests leave the catalog unchanged.</span></aside>
     </main>
   </div>;
 }

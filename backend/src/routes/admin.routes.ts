@@ -14,7 +14,7 @@ import {
   type AuditContext,
 } from '../services/customer.service';
 import { getUnifiedDashboard, requestRewardAdjustment } from '../services/reward.service';
-import { createReward, deleteReward, listRewards, updateReward } from '../services/reward-catalog.service';
+import { requestCreateReward, requestUpdateReward, requestDeleteReward, listRewards } from '../services/reward-catalog.service';
 import { listPendingRedemptionRequests, reviewRedemptionRequest } from '../services/reward-redemption.service';
 import { sendWhatsAppBookingRewardMessage } from '../services/whatsapp.service';
 import { ApiError } from '../shared/api-error';
@@ -111,32 +111,44 @@ adminRouter.post('/redemption-requests/:requestId/review', requireCsrf, async (r
   }
 });
 
-adminRouter.post('/rewards', requireCsrf, rewardImageUpload.single('image'), async (request, response) => {
-  const input = rewardCreateSchema.parse(request.body);
-  const data = await createReward({
-    ...input,
-    image: request.file,
-    audit: auditContext(request),
-  });
-  response.status(201).json({ data });
+adminRouter.post('/rewards', requireCsrf, rewardImageUpload.single('image'), async (request, response, next) => {
+  try {
+    const input = rewardCreateSchema.parse(request.body);
+    const data = await requestCreateReward({
+      ...input,
+      image: request.file,
+      audit: auditContext(request),
+    });
+    response.status(200).json({ data });
+  } catch (error) {
+    next(error);
+  }
 });
 
-adminRouter.patch('/rewards/:rewardId', requireCsrf, rewardImageUpload.single('image'), async (request, response) => {
-  const rewardId = z.string().uuid().parse(request.params.rewardId);
-  const input = rewardUpdateSchema.parse(request.body);
-  const data = await updateReward({
-    rewardId,
-    ...input,
-    image: request.file,
-    audit: auditContext(request),
-  });
-  response.status(200).json({ data });
+adminRouter.patch('/rewards/:rewardId', requireCsrf, rewardImageUpload.single('image'), async (request, response, next) => {
+  try {
+    const rewardId = z.string().uuid().parse(request.params.rewardId);
+    const input = rewardUpdateSchema.parse(request.body);
+    const data = await requestUpdateReward({
+      rewardId,
+      ...input,
+      image: request.file,
+      audit: auditContext(request),
+    });
+    response.status(200).json({ data });
+  } catch (error) {
+    next(error);
+  }
 });
 
-adminRouter.delete('/rewards/:rewardId', requireCsrf, async (request, response) => {
-  const rewardId = z.string().uuid().parse(request.params.rewardId);
-  const data = await deleteReward({ rewardId, audit: auditContext(request) });
-  response.status(200).json({ data });
+adminRouter.delete('/rewards/:rewardId', requireCsrf, async (request, response, next) => {
+  try {
+    const rewardId = z.string().uuid().parse(request.params.rewardId);
+    const data = await requestDeleteReward({ rewardId, audit: auditContext(request) });
+    response.status(200).json({ data });
+  } catch (error) {
+    next(error);
+  }
 });
 
 adminRouter.get('/customers', async (request, response) => {

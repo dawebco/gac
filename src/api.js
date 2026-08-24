@@ -195,6 +195,13 @@ export const superAdminApi = {
       body: { decision, ...(reviewNote.trim() ? { reviewNote: reviewNote.trim() } : {}) },
     });
   },
+  rewardChangeRequests: status => apiRequest(`/superadmin/reward-change-requests?status=${encodeURIComponent(status || 'PENDING')}`),
+  reviewRewardChangeRequest(requestId, decision, reviewNote = '') {
+    return superAdminMutation(`/superadmin/reward-change-requests/${requestId}/review`, {
+      method: 'POST',
+      body: { decision, ...(reviewNote.trim() ? { reviewNote: reviewNote.trim() } : {}) },
+    });
+  },
 };
 
 export const portalApi = {
