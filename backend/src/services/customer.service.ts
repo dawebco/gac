@@ -462,7 +462,8 @@ export async function reviewCustomerDeletionRequest(input: {
       );
 
       // 2. Reward ledger — NULL reversal_of self-references FIRST, then DELETE
-      console.log('[Delete Cascade] Temporarily disabling reward_ledger delete trigger...');
+      console.log('[Delete Cascade] Temporarily disabling reward_ledger triggers...');
+      await client.query(`ALTER TABLE reward_ledger DISABLE TRIGGER trg_reward_ledger_no_update`);
       await client.query(`ALTER TABLE reward_ledger DISABLE TRIGGER trg_reward_ledger_no_delete`);
 
       try {
@@ -483,7 +484,8 @@ export async function reviewCustomerDeletionRequest(input: {
           [phoneE164],
         );
       } finally {
-        console.log('[Delete Cascade] Re-enabling reward_ledger delete trigger...');
+        console.log('[Delete Cascade] Re-enabling reward_ledger triggers...');
+        await client.query(`ALTER TABLE reward_ledger ENABLE TRIGGER trg_reward_ledger_no_update`);
         await client.query(`ALTER TABLE reward_ledger ENABLE TRIGGER trg_reward_ledger_no_delete`);
       }
 
