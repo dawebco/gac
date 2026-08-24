@@ -99106,8 +99106,6 @@ async function reviewCustomerDeletionRequest(input) {
       await client.query(`DELETE FROM customer_reward_balances WHERE phone_e164 = $1`, [phoneE164]);
       console.log("[Delete Cascade] Purging reward accounts...");
       await client.query(`DELETE FROM reward_accounts WHERE phone_e164 = $1`, [phoneE164]);
-      console.log("[Delete Cascade] Purging customer dashboard summary...");
-      await client.query(`DELETE FROM customer_dashboard_summary WHERE phone_e164 = $1`, [phoneE164]);
       console.log("[Delete Cascade] Purging booking events...");
       await client.query(
         `DELETE FROM booking_events
@@ -99129,8 +99127,8 @@ async function reviewCustomerDeletionRequest(input) {
       await client.query(`DELETE FROM domain_events WHERE phone_e164 = $1`, [phoneE164]);
       console.log("[Delete Cascade] Purging admin audit logs for this customer...");
       await client.query(
-        `DELETE FROM admin_audit_logs WHERE entity_id = $1 OR request_id = $1`,
-        [phoneE164]
+        `DELETE FROM admin_audit_logs WHERE entity_id = $1 OR request_id = $2`,
+        [phoneE164, input.audit.requestId]
       );
       console.log("[Delete Cascade] Purging customer_subjects root record...");
       await client.query(`DELETE FROM customer_subjects WHERE phone_e164 = $1`, [phoneE164]);

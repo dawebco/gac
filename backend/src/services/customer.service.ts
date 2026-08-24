@@ -486,10 +486,6 @@ export async function reviewCustomerDeletionRequest(input: {
       console.log('[Delete Cascade] Purging reward accounts...');
       await client.query(`DELETE FROM reward_accounts WHERE phone_e164 = $1`, [phoneE164]);
 
-      // 3.5. Customer dashboard summary
-      console.log('[Delete Cascade] Purging customer dashboard summary...');
-      await client.query(`DELETE FROM customer_dashboard_summary WHERE phone_e164 = $1`, [phoneE164]);
-
       // 4. Booking events & bookings
       console.log('[Delete Cascade] Purging booking events...');
       await client.query(
@@ -522,8 +518,8 @@ export async function reviewCustomerDeletionRequest(input: {
 
       console.log('[Delete Cascade] Purging admin audit logs for this customer...');
       await client.query(
-        `DELETE FROM admin_audit_logs WHERE entity_id = $1 OR request_id = $1`,
-        [phoneE164],
+        `DELETE FROM admin_audit_logs WHERE entity_id = $1 OR request_id = $2`,
+        [phoneE164, input.audit.requestId],
       );
 
       // 8. Root identity anchor — MUST BE LAST
