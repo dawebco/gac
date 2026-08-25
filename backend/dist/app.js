@@ -99072,6 +99072,7 @@ async function reviewCustomerDeletionRequest(input) {
       return { success: true, message: "Customer deletion request rejected." };
     }
     const phoneE164 = req.phone_e164;
+    const customerName = req.customer_name;
     try {
       console.log(`[Delete Cascade] Step A: Updating deletion request ${input.requestId} to APPROVED...`);
       await client.query(

@@ -435,6 +435,7 @@ export async function reviewCustomerDeletionRequest(input: {
 
     // APPROVE -> Hard Cascade Deletion across all tables for customer identity
     const phoneE164 = req.phone_e164;
+    const customerName = req.customer_name;
 
     try {
       // Step A: Mark the request as APPROVED first
