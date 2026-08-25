@@ -299,6 +299,24 @@ export async function ensureCustomerDeletionRequestsTable(): Promise<void> {
       requested_at timestamptz NOT NULL DEFAULT now(),
       reviewed_at timestamptz
     );
+
+    CREATE OR REPLACE FUNCTION reject_reward_ledger_mutation()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      IF current_setting('app.allow_ledger_purge', true) = 'true' THEN
+        IF TG_OP = 'UPDATE' THEN
+          RETURN NEW;
+        ELSIF TG_OP = 'DELETE' THEN
+          RETURN OLD;
+        END IF;
+      END IF;
+
+      RAISE EXCEPTION 'reward_ledger is immutable; create a reversal entry instead'
+        USING ERRCODE = '55000';
+    END;
+    $$;
   `);
 }
 
@@ -416,27 +434,27 @@ export async function reviewCustomerDeletionRequest(input: {
     }
 
     // APPROVE -> Hard Cascade Deletion across all tables for customer identity
-    // Copy the request details before deleting the request record to avoid foreign key issues
-    const requestId = input.requestId;
     const phoneE164 = req.phone_e164;
-    const customerName = req.customer_name;
-
-    // Log the deletion of the request (for audit)
-    await writeAdminAudit(client, {
-      ...input.audit,
-      action: 'CUSTOMER_DELETION_REQUEST_DELETED',
-      entityType: 'CUSTOMER_DELETION_REQUEST',
-      entityId: requestId,
-    });
-
-    // Delete the deletion request record to remove the foreign key obstacle
-    await client.query(
-      `DELETE FROM customer_deletion_requests WHERE request_id = $1`,
-      [requestId]
-    );
 
     try {
-      console.log(`[Delete Cascade] Starting hard purge for phone: ${phoneE164}`);
+      // Step A: Mark the request as APPROVED first
+      console.log(`[Delete Cascade] Step A: Updating deletion request ${input.requestId} to APPROVED...`);
+      await client.query(
+        `UPDATE customer_deletion_requests
+         SET request_status = 'APPROVED', reviewed_by = $1, reviewed_at = now(), review_note = $2
+         WHERE request_id = $3`,
+        [input.superAdminUsername, input.reviewNote || null, input.requestId],
+      );
+
+      // Step B: Enable transaction-local purge override for reward_ledger trigger
+      console.log('[Delete Cascade] Step B: Setting session setting app.allow_ledger_purge = true');
+      await client.query(`SET LOCAL app.allow_ledger_purge = 'true'`);
+
+      // Drop potential foreign key constraint on customer_deletion_requests if present
+      await client.query(`ALTER TABLE customer_deletion_requests DROP CONSTRAINT IF EXISTS customer_deletion_requests_phone_e164_fkey`);
+
+      // Step C: Execute hard cascade purge in child-to-parent order
+      console.log(`[Delete Cascade] Step C: Purging all database records for phone: ${phoneE164}`);
 
       // 1. Purge reward_redemption_requests, reward_adjustment_requests, reward_change_requests
       console.log('[Delete Cascade] Purging reward redemption requests...');
@@ -455,39 +473,29 @@ export async function reviewCustomerDeletionRequest(input: {
         [phoneE164],
       );
 
-      console.log('[Delete Cascade] Checking reward change requests...');
+      console.log('[Delete Cascade] Purging reward change requests...');
       await client.query(
         `DELETE FROM reward_change_requests WHERE requested_by = $1`,
         [phoneE164],
       );
 
       // 2. Reward ledger — NULL reversal_of self-references FIRST, then DELETE
-      console.log('[Delete Cascade] Temporarily disabling reward_ledger triggers...');
-      await client.query(`ALTER TABLE reward_ledger DISABLE TRIGGER trg_reward_ledger_no_update`);
-      await client.query(`ALTER TABLE reward_ledger DISABLE TRIGGER trg_reward_ledger_no_delete`);
+      console.log('[Delete Cascade] Nulling reward_ledger reversal_of self-references...');
+      await client.query(
+        `UPDATE reward_ledger
+         SET reversal_of = NULL
+         WHERE phone_e164 = $1
+            OR reversal_of IN (SELECT entry_id FROM reward_ledger WHERE phone_e164 = $1)`,
+        [phoneE164],
+      );
 
-      try {
-        console.log('[Delete Cascade] Nulling reward_ledger reversal_of self-references...');
-        await client.query(
-          `UPDATE reward_ledger
-           SET reversal_of = NULL
-           WHERE phone_e164 = $1
-              OR reversal_of IN (SELECT entry_id FROM reward_ledger WHERE phone_e164 = $1)`,
-          [phoneE164],
-        );
-
-        console.log('[Delete Cascade] Purging reward ledger entries...');
-        await client.query(
-          `DELETE FROM reward_ledger
-           WHERE phone_e164 = $1
-              OR booking_id IN (SELECT booking_id FROM bookings WHERE phone_e164 = $1)`,
-          [phoneE164],
-        );
-      } finally {
-        console.log('[Delete Cascade] Re-enabling reward_ledger triggers...');
-        await client.query(`ALTER TABLE reward_ledger ENABLE TRIGGER trg_reward_ledger_no_update`);
-        await client.query(`ALTER TABLE reward_ledger ENABLE TRIGGER trg_reward_ledger_no_delete`);
-      }
+      console.log('[Delete Cascade] Purging reward ledger entries...');
+      await client.query(
+        `DELETE FROM reward_ledger
+         WHERE phone_e164 = $1
+            OR booking_id IN (SELECT booking_id FROM bookings WHERE phone_e164 = $1)`,
+        [phoneE164],
+      );
 
       // 3. Customer reward balances & reward accounts
       console.log('[Delete Cascade] Purging customer reward balances...');

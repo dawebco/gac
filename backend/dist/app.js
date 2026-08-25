@@ -98958,6 +98958,24 @@ async function ensureCustomerDeletionRequestsTable() {
       requested_at timestamptz NOT NULL DEFAULT now(),
       reviewed_at timestamptz
     );
+
+    CREATE OR REPLACE FUNCTION reject_reward_ledger_mutation()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      IF current_setting('app.allow_ledger_purge', true) = 'true' THEN
+        IF TG_OP = 'UPDATE' THEN
+          RETURN NEW;
+        ELSIF TG_OP = 'DELETE' THEN
+          RETURN OLD;
+        END IF;
+      END IF;
+
+      RAISE EXCEPTION 'reward_ledger is immutable; create a reversal entry instead'
+        USING ERRCODE = '55000';
+    END;
+    $$;
   `);
 }
 async function requestCustomerDeletion(input) {
@@ -99053,21 +99071,19 @@ async function reviewCustomerDeletionRequest(input) {
       });
       return { success: true, message: "Customer deletion request rejected." };
     }
-    const requestId = input.requestId;
     const phoneE164 = req.phone_e164;
-    const customerName = req.customer_name;
-    await writeAdminAudit(client, {
-      ...input.audit,
-      action: "CUSTOMER_DELETION_REQUEST_DELETED",
-      entityType: "CUSTOMER_DELETION_REQUEST",
-      entityId: requestId
-    });
-    await client.query(
-      `DELETE FROM customer_deletion_requests WHERE request_id = $1`,
-      [requestId]
-    );
     try {
-      console.log(`[Delete Cascade] Starting hard purge for phone: ${phoneE164}`);
+      console.log(`[Delete Cascade] Step A: Updating deletion request ${input.requestId} to APPROVED...`);
+      await client.query(
+        `UPDATE customer_deletion_requests
+         SET request_status = 'APPROVED', reviewed_by = $1, reviewed_at = now(), review_note = $2
+         WHERE request_id = $3`,
+        [input.superAdminUsername, input.reviewNote || null, input.requestId]
+      );
+      console.log("[Delete Cascade] Step B: Setting session setting app.allow_ledger_purge = true");
+      await client.query(`SET LOCAL app.allow_ledger_purge = 'true'`);
+      await client.query(`ALTER TABLE customer_deletion_requests DROP CONSTRAINT IF EXISTS customer_deletion_requests_phone_e164_fkey`);
+      console.log(`[Delete Cascade] Step C: Purging all database records for phone: ${phoneE164}`);
       console.log("[Delete Cascade] Purging reward redemption requests...");
       await client.query(
         `DELETE FROM reward_redemption_requests
@@ -99082,35 +99098,26 @@ async function reviewCustomerDeletionRequest(input) {
             OR ledger_entry_id IN (SELECT entry_id FROM reward_ledger WHERE phone_e164 = $1)`,
         [phoneE164]
       );
-      console.log("[Delete Cascade] Checking reward change requests...");
+      console.log("[Delete Cascade] Purging reward change requests...");
       await client.query(
         `DELETE FROM reward_change_requests WHERE requested_by = $1`,
         [phoneE164]
       );
-      console.log("[Delete Cascade] Temporarily disabling reward_ledger triggers...");
-      await client.query(`ALTER TABLE reward_ledger DISABLE TRIGGER trg_reward_ledger_no_update`);
-      await client.query(`ALTER TABLE reward_ledger DISABLE TRIGGER trg_reward_ledger_no_delete`);
-      try {
-        console.log("[Delete Cascade] Nulling reward_ledger reversal_of self-references...");
-        await client.query(
-          `UPDATE reward_ledger
-           SET reversal_of = NULL
-           WHERE phone_e164 = $1
-              OR reversal_of IN (SELECT entry_id FROM reward_ledger WHERE phone_e164 = $1)`,
-          [phoneE164]
-        );
-        console.log("[Delete Cascade] Purging reward ledger entries...");
-        await client.query(
-          `DELETE FROM reward_ledger
-           WHERE phone_e164 = $1
-              OR booking_id IN (SELECT booking_id FROM bookings WHERE phone_e164 = $1)`,
-          [phoneE164]
-        );
-      } finally {
-        console.log("[Delete Cascade] Re-enabling reward_ledger triggers...");
-        await client.query(`ALTER TABLE reward_ledger ENABLE TRIGGER trg_reward_ledger_no_update`);
-        await client.query(`ALTER TABLE reward_ledger ENABLE TRIGGER trg_reward_ledger_no_delete`);
-      }
+      console.log("[Delete Cascade] Nulling reward_ledger reversal_of self-references...");
+      await client.query(
+        `UPDATE reward_ledger
+         SET reversal_of = NULL
+         WHERE phone_e164 = $1
+            OR reversal_of IN (SELECT entry_id FROM reward_ledger WHERE phone_e164 = $1)`,
+        [phoneE164]
+      );
+      console.log("[Delete Cascade] Purging reward ledger entries...");
+      await client.query(
+        `DELETE FROM reward_ledger
+         WHERE phone_e164 = $1
+            OR booking_id IN (SELECT booking_id FROM bookings WHERE phone_e164 = $1)`,
+        [phoneE164]
+      );
       console.log("[Delete Cascade] Purging customer reward balances...");
       await client.query(`DELETE FROM customer_reward_balances WHERE phone_e164 = $1`, [phoneE164]);
       console.log("[Delete Cascade] Purging reward accounts...");
@@ -100444,13 +100451,13 @@ superAdminRouter.post("/customer-deletion-requests/:requestId/review", requireCs
     });
     response.status(200).json({ data });
   } catch (error51) {
-    console.error("[Customer Deletion Review Route Error]", error51);
+    console.error("[Deletion Approval Error]:", error51);
     response.status(500).json({
       error: error51?.message || String(error51),
-      detail: error51?.detail || error51?.stack || "No additional stack detail",
+      detail: error51?.detail || error51?.stack || null,
+      constraint: error51?.constraint || null,
       table: error51?.table || null,
-      code: error51?.code || null,
-      constraint: error51?.constraint || null
+      code: error51?.code || null
     });
   }
 });

@@ -28,8 +28,12 @@ async function apiRequest(path, options = {}) {
   if (response.status === 204) return null;
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = payload.error || {};
-    throw new ApiClientError(error.message || 'The server request failed.', error.code, response.status, error.details);
+    const errorObj = typeof payload.error === 'object' && payload.error ? payload.error : {};
+    const message = typeof payload.error === 'string'
+      ? payload.error
+      : (errorObj.message || payload.message || payload.detail || 'The server request failed.');
+    const details = payload.detail || payload.constraint || errorObj.details;
+    throw new ApiClientError(message, errorObj.code || payload.code, response.status, details);
   }
   return payload.data;
 }

@@ -91,13 +91,13 @@ superAdminRouter.post('/customer-deletion-requests/:requestId/review', requireCs
     });
     response.status(200).json({ data });
   } catch (error: any) {
-    console.error('[Customer Deletion Review Route Error]', error);
+    console.error('[Deletion Approval Error]:', error);
     response.status(500).json({
       error: error?.message || String(error),
-      detail: error?.detail || error?.stack || 'No additional stack detail',
+      detail: error?.detail || error?.stack || null,
+      constraint: error?.constraint || null,
       table: error?.table || null,
       code: error?.code || null,
-      constraint: error?.constraint || null,
     });
   }
 });
