@@ -924,21 +924,209 @@ function AdminRewardEditor({ reward, onSaved, onDeleted, onRefresh }) {
   </form>;
 }
 
+function AdminDatePickerInput({
+  label,
+  name,
+  value,
+  onChange,
+  min,
+  max,
+  placeholder = 'dd/mm/yyyy',
+}) {
+  const hiddenDateRef = useRef(null);
+
+  const isoToDisplay = (iso) => {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+    const [yyyy, mm, dd] = iso.split('-');
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const displayToIso = (display) => {
+    if (!display || !/^\d{2}\/\d{2}\/\d{4}$/.test(display)) return '';
+    const [dd, mm, yyyy] = display.split('/');
+    const d = parseInt(dd, 10);
+    const m = parseInt(mm, 10);
+    const y = parseInt(yyyy, 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1900 && y <= 2100) {
+      return `${yyyy}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+    return '';
+  };
+
+  const [displayText, setDisplayText] = useState(() => isoToDisplay(value));
+
+  useEffect(() => {
+    setDisplayText(isoToDisplay(value));
+  }, [value]);
+
+  const handleTextChange = (e) => {
+    let raw = e.target.value.replace(/[^0-9]/g, '');
+    if (raw.length > 8) raw = raw.slice(0, 8);
+
+    let formatted = raw;
+    if (raw.length > 4) {
+      formatted = `${raw.slice(0, 2)}/${raw.slice(2, 4)}/${raw.slice(4)}`;
+    } else if (raw.length > 2) {
+      formatted = `${raw.slice(0, 2)}/${raw.slice(2)}`;
+    }
+
+    setDisplayText(formatted);
+
+    if (formatted.length === 10) {
+      const parsedIso = displayToIso(formatted);
+      if (parsedIso) {
+        if (min && parsedIso < min) {
+          onChange(min);
+        } else if (max && parsedIso > max) {
+          onChange(max);
+        } else {
+          onChange(parsedIso);
+        }
+      }
+    } else if (formatted === '') {
+      onChange('');
+    }
+  };
+
+  const handleTextBlur = () => {
+    if (displayText && displayText.length !== 10) {
+      setDisplayText(isoToDisplay(value));
+    }
+  };
+
+  const openPicker = () => {
+    if (hiddenDateRef.current) {
+      if (typeof hiddenDateRef.current.showPicker === 'function') {
+        try {
+          hiddenDateRef.current.showPicker();
+        } catch {
+          hiddenDateRef.current.focus();
+          hiddenDateRef.current.click();
+        }
+      } else {
+        hiddenDateRef.current.focus();
+        hiddenDateRef.current.click();
+      }
+    }
+  };
+
+  const handleNativeDateChange = (e) => {
+    const newIso = e.target.value;
+    onChange(newIso);
+    setDisplayText(isoToDisplay(newIso));
+  };
+
+  return (
+    <div className="admin-date-picker-wrap">
+      <label>{label}</label>
+      <div className="admin-date-input-box" onClick={openPicker}>
+        <input
+          type="text"
+          className="admin-date-text-input"
+          placeholder={placeholder}
+          value={displayText}
+          onChange={handleTextChange}
+          onBlur={handleTextBlur}
+          onClick={(e) => {
+            e.stopPropagation();
+            openPicker();
+          }}
+        />
+        <button
+          type="button"
+          className="admin-date-picker-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            openPicker();
+          }}
+          aria-label={`Open date picker for ${label}`}
+        >
+          <Calendar size={17} />
+        </button>
+        <input
+          ref={hiddenDateRef}
+          type="date"
+          tabIndex={-1}
+          name={name}
+          value={value || ''}
+          min={min || undefined}
+          max={max || undefined}
+          onChange={handleNativeDateChange}
+          className="admin-hidden-date-input"
+        />
+      </div>
+    </div>
+  );
+}
+
 function AdminReportPanel({ customers }) {
   const [form, setForm] = useState({ type: 'All bookings', start: '', end: '' });
   const [report, setReport] = useState(null);
+
   const update = event => setForm(current => ({ ...current, [event.target.name]: event.target.value }));
-  const generate = event => {
-    event.preventDefault();
-    setReport({
-      customers: customers.length,
-      bookings: customers.reduce((sum, customer) => sum + customer.bookings, 0),
-      type: form.type,
-      range: form.start && form.end ? `${form.start} to ${form.end}` : 'All dates',
-      generatedAt: new Date().toLocaleString('en-IN'),
-      rows: customers,
+
+  const setStartDate = (startIso) => {
+    setForm(current => {
+      let nextEnd = current.end;
+      if (startIso && nextEnd && nextEnd < startIso) {
+        nextEnd = startIso;
+      }
+      return { ...current, start: startIso, end: nextEnd };
     });
   };
+
+  const setEndDate = (endIso) => {
+    setForm(current => {
+      let nextEnd = endIso;
+      if (current.start && nextEnd && nextEnd < current.start) {
+        nextEnd = current.start;
+      }
+      return { ...current, end: nextEnd };
+    });
+  };
+
+  const formatDateDisplay = (isoStr) => {
+    if (!isoStr) return '';
+    const [yyyy, mm, dd] = isoStr.split('-');
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const generate = event => {
+    event.preventDefault();
+    const typeFilter = form.type === 'All bookings' ? null : form.type.toUpperCase();
+
+    const filteredRows = customers.map(customer => {
+      const items = (customer.bookingItems || []).filter(b => {
+        if (b.status === 'VOIDED') return false;
+        if (typeFilter && b.type?.toUpperCase() !== typeFilter) return false;
+        if (form.start && b.date && b.date < form.start) return false;
+        if (form.end && b.date && b.date > form.end) return false;
+        return true;
+      });
+      return {
+        ...customer,
+        filteredBookingsCount: items.length,
+      };
+    }).filter(c => c.filteredBookingsCount > 0 || (!form.start && !form.end && form.type === 'All bookings'));
+
+    const totalBookingsCount = filteredRows.reduce((sum, c) => sum + (c.filteredBookingsCount || c.bookings || 0), 0);
+
+    setReport({
+      customers: filteredRows.length,
+      bookings: totalBookingsCount,
+      type: form.type,
+      range: form.start && form.end
+        ? `${formatDateDisplay(form.start)} to ${formatDateDisplay(form.end)}`
+        : form.start
+          ? `From ${formatDateDisplay(form.start)}`
+          : form.end
+            ? `Until ${formatDateDisplay(form.end)}`
+            : 'All dates',
+      generatedAt: new Date().toLocaleString('en-IN'),
+      rows: filteredRows.length > 0 ? filteredRows : customers,
+    });
+  };
+
   const downloadExcel = () => {
     if (!report) return;
     const escapeCell = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -954,10 +1142,96 @@ function AdminReportPanel({ customers }) {
     link.remove();
     URL.revokeObjectURL(url);
   };
-  return <section className="admin-form-card admin-report-card"><header><i><Briefcase size={21}/></i><div><h2>Generate Report</h2><p>Choose filters to prepare a booking summary.</p></div></header><form onSubmit={generate}>
-    <div className="admin-form-grid admin-report-filters"><label>Booking Type<select name="type" value={form.type} onChange={update}><option>All bookings</option><option>Flights</option><option>Hotels</option><option>Holidays</option></select></label><label>Start Date<input name="start" type="date" value={form.start} onChange={update}/></label><label>End Date<input name="end" type="date" value={form.end} onChange={update}/></label></div>
-    <div className="admin-form-actions"><button type="submit" className="admin-primary-action"><Briefcase size={18}/>Generate Report</button></div>
-  </form>{report && <section className="admin-report-preview" aria-label="Report preview"><header><div><h3>Report Preview</h3><p>Generated {report.generatedAt}</p></div><button type="button" onClick={downloadExcel}><Download size={17}/>Download Excel</button></header><div className="admin-report-result"><div><small>CUSTOMERS</small><strong>{report.customers}</strong></div><div><small>BOOKINGS</small><strong>{report.bookings}</strong></div><div><small>TYPE</small><strong>{report.type}</strong></div><div><small>DATE RANGE</small><strong>{report.range}</strong></div></div><div className="admin-report-table-wrap"><table className="admin-report-table"><thead><tr><th>Customer</th><th>Phone</th><th>Bookings</th><th>Points</th></tr></thead><tbody>{report.rows.map(customer => <tr key={customer.phone}><td><strong>{customer.name}</strong><small>{customer.email}</small></td><td>{customer.phone}</td><td>{customer.bookings}</td><td>{customer.points}</td></tr>)}</tbody></table></div></section>}</section>;
+
+  return (
+    <section className="admin-form-card admin-report-card">
+      <header>
+        <i><Briefcase size={21}/></i>
+        <div>
+          <h2>Generate Report</h2>
+          <p>Choose filters to prepare a booking summary.</p>
+        </div>
+      </header>
+      <form onSubmit={generate}>
+        <div className="admin-form-grid admin-report-filters">
+          <label>
+            Booking Type
+            <select name="type" value={form.type} onChange={update}>
+              <option>All bookings</option>
+              <option>Flights</option>
+              <option>Hotels</option>
+              <option>Holidays</option>
+            </select>
+          </label>
+          <AdminDatePickerInput
+            label="Start Date"
+            name="start"
+            value={form.start}
+            onChange={setStartDate}
+            max={form.end}
+            placeholder="dd/mm/yyyy"
+          />
+          <AdminDatePickerInput
+            label="End Date"
+            name="end"
+            value={form.end}
+            onChange={setEndDate}
+            min={form.start}
+            placeholder="dd/mm/yyyy"
+          />
+        </div>
+        <div className="admin-form-actions">
+          <button type="submit" className="admin-primary-action">
+            <Briefcase size={18}/>Generate Report
+          </button>
+        </div>
+      </form>
+      {report && (
+        <section className="admin-report-preview" aria-label="Report preview">
+          <header>
+            <div>
+              <h3>Report Preview</h3>
+              <p>Generated {report.generatedAt}</p>
+            </div>
+            <button type="button" onClick={downloadExcel}>
+              <Download size={17}/>Download Excel
+            </button>
+          </header>
+          <div className="admin-report-result">
+            <div><small>CUSTOMERS</small><strong>{report.customers}</strong></div>
+            <div><small>BOOKINGS</small><strong>{report.bookings}</strong></div>
+            <div><small>TYPE</small><strong>{report.type}</strong></div>
+            <div><small>DATE RANGE</small><strong>{report.range}</strong></div>
+          </div>
+          <div className="admin-report-table-wrap">
+            <table className="admin-report-table">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Phone</th>
+                  <th>Bookings</th>
+                  <th>Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.rows.map(customer => (
+                  <tr key={customer.phone}>
+                    <td>
+                      <strong>{customer.name}</strong>
+                      <small>{customer.email}</small>
+                    </td>
+                    <td>{customer.phone}</td>
+                    <td>{customer.filteredBookingsCount ?? customer.bookings}</td>
+                    <td>{customer.points}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+    </section>
+  );
 }
 
 function AdminDeleteCustomerPanel({ customers, onRefresh }) {

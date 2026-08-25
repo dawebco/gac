@@ -431,6 +431,15 @@
 .admin-form-message { margin: 15px 0 0; padding: 11px 13px; border-radius: 8px; background: #f0f8ff; color: #28527d; font-size: 11px; }
 
 .admin-report-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-date-picker-wrap { display: grid; gap: 7px; width: 100%; }
+.admin-date-picker-wrap label { color: #40516a; font-size: 11px; font-weight: 700; }
+.admin-date-input-box { position: relative; display: flex; align-items: center; width: 100%; height: 43px; border: 1px solid #d5dde8; border-radius: 8px; background: #fbfcfe; transition: border-color .18s ease, box-shadow .18s ease, background .18s ease; cursor: text; }
+.admin-date-input-box:focus-within { border-color: var(--admin-yellow, #ffbf00); box-shadow: 0 0 0 3px rgba(255,191,0,.13); background: #fff; }
+.admin-date-text-input { flex: 1; min-width: 0; height: 100%; padding: 0 13px; border: 0; outline: 0; background: transparent; color: #0f1f38; font: 12px Inter, Arial, sans-serif; }
+.admin-date-text-input::placeholder { color: #94a3b8; }
+.admin-date-picker-btn { display: flex; align-items: center; justify-content: center; width: 38px; height: 100%; padding: 0; border: 0; background: transparent; color: #64748b; cursor: pointer; transition: color .15s ease; }
+.admin-date-picker-btn:hover { color: #001735; }
+.admin-hidden-date-input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; bottom: 0; left: 0; }
 .admin-report-preview { margin-top: 22px; padding-top: 20px; border-top: 1px solid #e6ebf1; }
 .admin-report-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .admin-report-preview h3 { margin: 0; color: #071a36; font-size: 16px; }
