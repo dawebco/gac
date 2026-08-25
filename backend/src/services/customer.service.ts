@@ -479,17 +479,16 @@ export async function reviewCustomerDeletionRequest(input: {
         [phoneE164],
       );
 
-      // 2. Reward ledger — NULL reversal_of self-references FIRST, then DELETE
-      console.log('[Delete Cascade] Nulling reward_ledger reversal_of self-references...');
+      // 2. Reward ledger — DELETE reversal entries FIRST to remove reversal_of FK references, then DELETE remaining entries
+      console.log('[Delete Cascade] Purging reward_ledger reversal entries...');
       await client.query(
-        `UPDATE reward_ledger
-         SET reversal_of = NULL
-         WHERE phone_e164 = $1
-            OR reversal_of IN (SELECT entry_id FROM reward_ledger WHERE phone_e164 = $1)`,
+        `DELETE FROM reward_ledger
+         WHERE reversal_of IN (SELECT entry_id FROM reward_ledger WHERE phone_e164 = $1)
+            OR (phone_e164 = $1 AND reversal_of IS NOT NULL)`,
         [phoneE164],
       );
 
-      console.log('[Delete Cascade] Purging reward ledger entries...');
+      console.log('[Delete Cascade] Purging remaining reward ledger entries...');
       await client.query(
         `DELETE FROM reward_ledger
          WHERE phone_e164 = $1
