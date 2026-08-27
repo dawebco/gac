@@ -179,6 +179,33 @@
 .admin-customer-modal dd { margin: 0; font-size: 12px; font-weight: 700; }
 .admin-modal-close { position: absolute; top: 13px; right: 13px; width: 32px; height: 32px; border: 0; border-radius: 8px; background: #f1f5f9; color: #64748b; display: grid; place-items: center; cursor: pointer; }
 
+/* ── Confirm Deletion Modal ── */
+.delete-confirm-backdrop { position: fixed; z-index: 60; inset: 0; padding: 20px; background: rgba(15,23,42,.50); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: grid; place-items: center; }
+.delete-confirm-modal { position: relative; width: min(480px,100%); padding: 28px; border-radius: 16px; background: #fff; border: 1px solid #e2e8f0; box-shadow: 0 25px 50px -12px rgba(0,0,0,.25); text-align: left; }
+.delete-confirm-modal .admin-modal-close { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; transition: background .15s ease, color .15s ease; }
+.delete-confirm-modal .admin-modal-close:hover { background: #e2e8f0; color: #0f172a; }
+.delete-confirm-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.delete-confirm-header i { width: 44px; height: 44px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: grid; place-items: center; flex-shrink: 0; }
+.delete-confirm-header h2 { margin: 0; font-size: 17px; font-weight: 700; color: #dc2626; }
+.delete-confirm-header p { margin: 3px 0 0; color: #64748b; font-size: 12px; }
+.delete-confirm-customer { padding: 12px 14px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.delete-confirm-customer b { color: #0f172a; }
+.delete-confirm-customer span { color: #64748b; font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace; font-size: 12px; }
+.delete-confirm-label { display: block; font-size: 11px; font-weight: 600; color: #64748b; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 6px; }
+.delete-confirm-label code { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 1px 6px; border-radius: 4px; font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace; font-size: 11px; font-weight: 600; }
+.delete-confirm-modal textarea,
+.delete-confirm-modal input[type="text"] { width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font: 13px/1.5 Inter, Arial, sans-serif; outline: none; color: #0f172a; background: #fff; transition: border-color .15s ease, box-shadow .15s ease; }
+.delete-confirm-modal textarea:focus,
+.delete-confirm-modal input[type="text"]:focus { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,.12); }
+.delete-confirm-modal input[type="text"] { font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace; }
+.delete-confirm-modal input.confirm-matched { border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,.10); }
+.delete-confirm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.delete-confirm-cancel { min-height: 40px; padding: 0 18px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #334155; font: 600 12px/1 Inter, Arial, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background .15s ease, border-color .15s ease; }
+.delete-confirm-cancel:hover { background: #f8fafc; border-color: #94a3b8; }
+.delete-confirm-submit { min-height: 40px; padding: 0 20px; border-radius: 8px; border: 1px solid #dc2626; background: #dc2626; color: #fff; font: 600 12px/1 Inter, Arial, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s ease, border-color .15s ease, opacity .15s ease; white-space: nowrap; }
+.delete-confirm-submit:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }
+.delete-confirm-submit:disabled { opacity: .4; cursor: not-allowed; }
+
 .admin-shell .admin-modal-backdrop { z-index: 60; }
 .admin-customer-modal.admin-customer-manager { width: min(780px, 100%); max-height: calc(100vh - 36px); padding: 23px; overflow: hidden; display: flex; flex-direction: column; text-align: left; }
 .admin-customer-manager-header { padding: 0 42px 18px 0; display: flex; align-items: center; gap: 13px; }

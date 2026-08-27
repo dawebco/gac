@@ -1377,39 +1377,38 @@ function AdminDeleteCustomerPanel({ customers, onRefresh }) {
     </section>
 
     {targetCustomer && (
-      <div className="admin-modal-backdrop">
-        <div className="admin-customer-modal" style={{ maxWidth: '480px', textAlign: 'left' }}>
+      <div className="delete-confirm-backdrop">
+        <div className="delete-confirm-modal">
           <button type="button" className="admin-modal-close" onClick={closeDeleteModal} aria-label="Close"><X size={16}/></button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
-            <i style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+          <div className="delete-confirm-header">
+            <i>
               <AlertCircle size={22}/>
             </i>
             <div>
-              <h2 style={{ margin: 0, fontSize: '17px', color: '#dc2626' }}>Confirm Deletion Request</h2>
-              <p style={{ margin: '3px 0 0', color: '#64748b', fontSize: '12px' }}>This action will be sent to Super Admin for final approval.</p>
+              <h2>Confirm Deletion Request</h2>
+              <p>This action will be sent to Super Admin for final approval.</p>
             </div>
           </div>
 
-          <div style={{ padding: '12px 14px', borderRadius: '10px', background: '#f8fafc', marginBottom: '18px', fontSize: '13px', color: '#334155' }}>
-            <b>{targetCustomer.name}</b><span style={{ color: '#94a3b8', marginLeft: '8px', fontFamily: 'monospace', fontSize: '12px' }}>+91 {targetCustomer.phone}</span>
+          <div className="delete-confirm-customer">
+            <b>{targetCustomer.name}</b><span>+91 {targetCustomer.phone}</span>
           </div>
 
           <form onSubmit={handleDeletionSubmit}>
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '.3px', marginBottom: '6px' }}>REASON FOR DELETION</label>
+              <label className="delete-confirm-label">REASON FOR DELETION</label>
               <textarea
                 rows={3}
                 value={reason}
                 onChange={e => setReason(e.target.value)}
                 placeholder="Enter a detailed reason for this deletion request..."
                 required
-                style={{ width: '100%', boxSizing: 'border-box', padding: '9px 10px', borderRadius: '8px', border: '1px solid #d9e2ec', font: '13px Inter, Arial', resize: 'vertical', outline: 'none' }}
               />
             </div>
 
             <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '.3px', marginBottom: '6px' }}>
-                TYPE <code style={{ color: '#dc2626', background: '#fee2e2', padding: '1px 5px', borderRadius: '4px' }}>confirm_delete</code> TO UNLOCK
+              <label className="delete-confirm-label">
+                TYPE <code>confirm_delete</code> TO UNLOCK
               </label>
               <input
                 type="text"
@@ -1418,7 +1417,7 @@ function AdminDeleteCustomerPanel({ customers, onRefresh }) {
                 placeholder="confirm_delete"
                 required
                 autoComplete="off"
-                style={{ width: '100%', boxSizing: 'border-box', padding: '9px 10px', borderRadius: '8px', border: `1px solid ${confirmInput.trim() === 'confirm_delete' ? '#16a34a' : '#d9e2ec'}`, font: '13px/1 Inter, Arial', outline: 'none', fontFamily: 'monospace' }}
+                className={confirmInput.trim() === 'confirm_delete' ? 'confirm-matched' : ''}
               />
             </div>
 
@@ -1428,13 +1427,12 @@ function AdminDeleteCustomerPanel({ customers, onRefresh }) {
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button type="button" className="admin-secondary-action" onClick={closeDeleteModal}>Cancel</button>
+            <div className="delete-confirm-actions">
+              <button type="button" className="delete-confirm-cancel" onClick={closeDeleteModal}>Cancel</button>
               <button
                 type="submit"
-                className="btn-delete-red"
+                className="delete-confirm-submit"
                 disabled={submitting || !canSubmit}
-                style={{ minHeight: '40px', padding: '0 18px', borderRadius: '8px', fontSize: '12px', opacity: canSubmit ? 1 : 0.45 }}
               >
                 {submitting ? 'Submitting…' : 'Submit Deletion Request'}
               </button>
