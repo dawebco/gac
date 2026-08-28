@@ -806,6 +806,17 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: #64748B;
 }
 
+.dawebco-link {
+  color: #64748B;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.3s ease;
+}
+
+.dawebco-link:hover {
+  color: #D4A843;
+}
+
 /* Toast Message & Validation Errors */
 .form-input.has-error {
   border-color: #EF4444 !important;
