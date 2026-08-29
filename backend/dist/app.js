@@ -99854,8 +99854,8 @@ async function sendWhatsAppBookingRewardMessage(options) {
   const recipient = options.phoneE164.replace(/[^0-9]/g, "");
   const url2 = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
   const normalizedType = String(options.bookingType || "").toUpperCase();
-  const imageFileName = normalizedType.includes("FLIGHT") ? "flight.png" : normalizedType.includes("HOTEL") ? "hotel.png" : "holiday.png";
-  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || "https://gac-dawebco.vercel.app").replace(/\/$/, "");
+  const imageFileName = normalizedType.includes("FLIGHT") ? "flight.png" : normalizedType.includes("HOTEL") ? "hotel.png" : "holiday-v2.png";
+  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || "https://reward.gacholidays.com").replace(/\/$/, "");
   const headerImageUrl = options.imageUrl || `${publicBaseUrl}/images/${imageFileName}`;
   const payload = {
     messaging_product: "whatsapp",

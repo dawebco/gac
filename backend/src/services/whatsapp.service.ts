@@ -102,8 +102,8 @@ export async function sendWhatsAppBookingRewardMessage(
     ? 'flight.png'
     : normalizedType.includes('HOTEL')
       ? 'hotel.png'
-      : 'holiday.png';
-  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || 'https://gac-dawebco.vercel.app').replace(/\/$/, '');
+      : 'holiday-v2.png';
+  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || 'https://reward.gacholidays.com').replace(/\/$/, '');
   const headerImageUrl = options.imageUrl || `${publicBaseUrl}/images/${imageFileName}`;
 
   const payload = {
