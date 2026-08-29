@@ -84031,7 +84031,7 @@ var envSchema = external_exports.object({
   API_PREFIX: external_exports.string().trim().regex(/^\//).default("/api/v1"),
   LOG_LEVEL: external_exports.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   TRUST_PROXY: booleanFromString.default(false),
-  CORS_ORIGINS: external_exports.string().trim().min(1).default("http://localhost:3000"),
+  CORS_ORIGINS: external_exports.string().trim().min(1).default("http://localhost:3000,https://gac-dawebco.vercel.app,https://reward.gacholidays.com"),
   DATABASE_URL: external_exports.string().trim().min(1).refine(
     (value) => value.startsWith("postgres://") || value.startsWith("postgresql://"),
     "DATABASE_URL must be a PostgreSQL connection string"
@@ -100474,12 +100474,22 @@ try {
   app.use(compression());
 } catch {
 }
+var DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "https://gac-dawebco.vercel.app",
+  "https://reward.gacholidays.com",
+  "http://reward.gacholidays.com"
+];
+var allowedOrigins = /* @__PURE__ */ new Set([
+  ...DEFAULT_ALLOWED_ORIGINS,
+  ...env.CORS_ORIGINS
+]);
 app.use((0, import_cors.default)({
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key", "X-Request-Id", "X-CSRF-Token"],
   origin(origin, callback) {
-    if (!origin || env.CORS_ORIGINS.includes(origin)) {
+    if (!origin || allowedOrigins.has(origin)) {
       callback(null, true);
       return;
     }

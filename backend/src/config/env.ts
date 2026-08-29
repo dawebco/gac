@@ -22,7 +22,7 @@ const envSchema = z.object({
   API_PREFIX: z.string().trim().regex(/^\//).default('/api/v1'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   TRUST_PROXY: booleanFromString.default(false),
-  CORS_ORIGINS: z.string().trim().min(1).default('http://localhost:3000'),
+  CORS_ORIGINS: z.string().trim().min(1).default('http://localhost:3000,https://gac-dawebco.vercel.app,https://reward.gacholidays.com'),
   DATABASE_URL: z.string().trim().min(1).refine(
     (value) => value.startsWith('postgres://') || value.startsWith('postgresql://'),
     'DATABASE_URL must be a PostgreSQL connection string',

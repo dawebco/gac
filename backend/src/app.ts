@@ -30,12 +30,24 @@ try {
 } catch {
   // Compression is natively provided at Vercel's edge network layer
 }
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'https://gac-dawebco.vercel.app',
+  'https://reward.gacholidays.com',
+  'http://reward.gacholidays.com',
+];
+
+const allowedOrigins = new Set([
+  ...DEFAULT_ALLOWED_ORIGINS,
+  ...env.CORS_ORIGINS,
+]);
+
 app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id', 'X-CSRF-Token'],
   origin(origin, callback) {
-    if (!origin || env.CORS_ORIGINS.includes(origin)) {
+    if (!origin || allowedOrigins.has(origin)) {
       callback(null, true);
       return;
     }
