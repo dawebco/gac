@@ -11,6 +11,7 @@ import {
   getAdminCustomer,
   getAdminOverview,
   listAdminCustomers,
+  listNewPortalCustomers,
   requestCustomerDeletion,
   listPendingCustomerDeletionRequests,
   type AuditContext,
@@ -160,6 +161,14 @@ adminRouter.get('/customers', async (request, response) => {
     offset: z.coerce.number().int().min(0).default(0),
   }).parse(request.query);
   response.status(200).json({ data: await listAdminCustomers(filters.search, filters.limit, filters.offset) });
+});
+
+adminRouter.get('/new-customers', async (request, response) => {
+  const filters = z.object({
+    search: z.string().max(150).default(''),
+    limit: z.coerce.number().int().min(1).max(10_000).default(250),
+  }).parse(request.query);
+  response.status(200).json({ data: await listNewPortalCustomers(filters.search, filters.limit) });
 });
 
 adminRouter.post('/customers', requireCsrf, async (request, response) => {

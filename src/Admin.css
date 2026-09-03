@@ -487,6 +487,13 @@
 .admin-report-table td:first-child strong,
 .admin-report-table td:first-child small { display: block; }
 .admin-report-table td:first-child small { margin-top: 3px; color: #7a889b; font-size: 9px; }
+.admin-new-customers-card { width: min(980px, 100%); }
+.admin-new-customers-search { margin: 20px 0 14px; background: #fbfcfe; }
+.admin-new-customers-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; color: #64748b; font-size: 11px; font-weight: 700; }
+.admin-new-customers-toolbar .admin-primary-action:disabled { cursor: wait; opacity: .65; }
+.admin-new-customers-table { min-width: 760px; }
+.admin-new-customers-table th:nth-child(1) { width: 32%; }
+.admin-new-customers-table td small { display: block; margin-top: 3px; color: #7a889b; font-size: 9px; }
 
 @media (max-width: 1050px) {
   .admin-main .admin-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -559,6 +566,8 @@
   .admin-form-actions button { width: 100%; }
   .admin-report-preview > header { align-items: flex-start; flex-direction: column; }
   .admin-report-preview > header button { width: 100%; justify-content: center; }
+  .admin-new-customers-toolbar { align-items: stretch; flex-direction: column; }
+  .admin-new-customers-toolbar .admin-primary-action { width: 100%; }
   .admin-report-result { padding: 10px; }
   .admin-report-table { min-width: 540px; }
   .admin-main .admin-info { font-size: 9px; }

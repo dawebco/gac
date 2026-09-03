@@ -27,6 +27,14 @@ interface CustomerRow {
   total_points_redeemed: number;
 }
 
+interface NewPortalCustomerRow {
+  phone_e164: string;
+  full_name: string;
+  email: string;
+  date_of_birth: string | null;
+  registered_at: Date;
+}
+
 export function mapCustomer(row: CustomerRow) {
   return {
     phoneE164: row.phone_e164,
@@ -64,6 +72,40 @@ export async function listAdminCustomers(search = '', limit = 100, offset = 0) {
     [normalizedSearch, limit, offset],
   );
   return result.rows.map(mapCustomer);
+}
+
+/**
+ * Self-registered portal customers that have not been added to the admin
+ * customer register and do not have any bookings yet.
+ */
+export async function listNewPortalCustomers(search = '', limit = 250) {
+  const normalizedSearch = search.trim();
+  const result = await query<NewPortalCustomerRow>(
+    `SELECT profile.phone_e164, profile.full_name, profile.email, profile.date_of_birth, profile.registered_at
+     FROM portal_customer_profiles profile
+     WHERE NOT EXISTS (
+       SELECT 1 FROM admin_customer_records admin_record
+       WHERE admin_record.phone_e164 = profile.phone_e164
+     )
+       AND NOT EXISTS (
+         SELECT 1 FROM bookings booking
+         WHERE booking.phone_e164 = profile.phone_e164
+       )
+       AND ($1 = '' OR profile.full_name ILIKE '%' || $1 || '%'
+         OR profile.email ILIKE '%' || $1 || '%'
+         OR profile.phone_e164 LIKE '%' || regexp_replace($1, '[^0-9]', '', 'g') || '%')
+     ORDER BY profile.registered_at DESC
+     LIMIT $2`,
+    [normalizedSearch, limit],
+  );
+  return result.rows.map(row => ({
+    phoneE164: row.phone_e164,
+    phone: nationalPhone(row.phone_e164),
+    name: row.full_name,
+    email: row.email,
+    dateOfBirth: row.date_of_birth,
+    registeredAt: row.registered_at,
+  }));
 }
 
 export async function getAdminCustomer(phoneInput: string, client?: PoolClient) {

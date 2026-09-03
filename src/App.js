@@ -3,7 +3,7 @@ import {
   AlertCircle, Award, Bell, Briefcase, Calendar, CheckCircle2, ChevronDown, Download,
   ChevronRight, CircleDollarSign, Eye, EyeOff, Gift, History, Check,
   ImagePlus, LayoutDashboard, Lock, LogOut, Mail, MapPin, Menu, Minus, Phone, Plus,
-  Save, Search, ShieldCheck, Star, Trash2, User, UserRound, Users, UserX, WalletCards, X
+  Save, Search, ShieldCheck, Star, Trash2, User, UserRound, Users, UserPlus, UserX, WalletCards, X
 } from 'lucide-react';
 import logoImg from './assets/logo-3.png';
 import './Admin.css';
@@ -463,6 +463,7 @@ function AdminDashboard({ onLogout }) {
     customers: ['Manage Customers', 'Search, review and manage every customer.'],
     rewards: ['Manage Rewards', 'Update reward images and descriptions shown to every customer.'],
     reports: ['Generate Report', 'Filter booking data and prepare a summary.'],
+    new_customers: ['New Customers', 'Review self-registered customers with no bookings.'],
     delete_customer: ['Delete Customer', 'Search and request deletion of a customer profile.'],
   };
   const navItems = [
@@ -471,6 +472,7 @@ function AdminDashboard({ onLogout }) {
     ['customers', Users, 'Manage Customers'],
     ['rewards', Gift, 'Manage Rewards'],
     ['reports', Briefcase, 'Generate Report'],
+    ['new_customers', UserPlus, 'New Customers'],
     ['delete_customer', UserX, 'Delete Customer'],
   ];
   const metrics = [
@@ -534,6 +536,7 @@ function AdminDashboard({ onLogout }) {
         />
       )} 
       {section === 'reports' && <AdminReportPanel customers={customers}/>}
+      {section === 'new_customers' && <AdminNewCustomersPanel/>}
       {section === 'delete_customer' && <AdminDeleteCustomerPanel customers={customers} onRefresh={refreshData}/>}
       <aside className="admin-info"><b>i</b><span>Reward points are calculated automatically based on the company's criteria and updated in the system.</span></aside>
     </main>
@@ -1057,6 +1060,76 @@ function AdminDatePickerInput({
       </div>
     </div>
   );
+}
+
+function AdminNewCustomersPanel() {
+  const [query, setQuery] = useState('');
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const rows = await adminApi.newCustomers(query);
+        if (!cancelled) setCustomers(rows);
+      } catch (requestError) {
+        if (!cancelled) {
+          setCustomers([]);
+          setError(requestError.message || 'Unable to load new customers.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
+  const formatDate = value => value ? new Date(value).toLocaleDateString('en-IN') : '—';
+  const downloadExcel = async () => {
+    setDownloading(true);
+    setError('');
+    try {
+      const allCustomers = await adminApi.newCustomers('', 10000);
+      const escapeCell = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const customerRows = allCustomers.map(customer => `<tr><td>${escapeCell(customer.name)}</td><td>${escapeCell(customer.email)}</td><td>${escapeCell(customer.phone)}</td><td>${escapeCell(customer.dateOfBirth || '')}</td><td>${escapeCell(formatDate(customer.registeredAt))}</td><td>0</td></tr>`).join('');
+      const workbook = `<!doctype html><html><head><meta charset="UTF-8"><style>body{font-family:Arial,sans-serif}h1{color:#001735}table{border-collapse:collapse;width:100%}th{background:#001735;color:#fff}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}.meta td:first-child{font-weight:bold;background:#f8fafc}</style></head><body><h1>GAC Holidays New Customers</h1><table class="meta"><tr><td>Criteria</td><td>Self-registered customers with no bookings and no admin customer record</td></tr><tr><td>Generated</td><td>${escapeCell(new Date().toLocaleString('en-IN'))}</td></tr><tr><td>Total customers</td><td>${allCustomers.length}</td></tr></table><br><table><thead><tr><th>Customer Name</th><th>Email Address</th><th>Phone Number</th><th>Date of Birth</th><th>Registered On</th><th>Bookings</th></tr></thead><tbody>${customerRows}</tbody></table></body></html>`;
+      const blob = new Blob(['\ufeff', workbook], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `gac-new-customers-${new Date().toISOString().slice(0, 10)}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (downloadError) {
+      setError(downloadError.message || 'Unable to download the new-customer report.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return <section className="admin-form-card admin-new-customers-card">
+    <header><i><UserPlus size={21}/></i><div><h2>New Customers</h2><p>Self-registered customers who have no bookings and are not yet in the admin customer register.</p></div></header>
+    <label className="admin-search admin-new-customers-search"><Search size={19}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search by name, email or phone..." aria-label="Search new customers"/></label>
+    <div className="admin-new-customers-toolbar"><span>{loading ? 'Searching customers...' : `${customers.length} new customer${customers.length === 1 ? '' : 's'} found`}</span><button type="button" className="admin-primary-action" onClick={downloadExcel} disabled={downloading}><Download size={17}/>{downloading ? 'Preparing download...' : 'Download Excel'}</button></div>
+    {error && <p className="admin-form-message" role="alert">{error}</p>}
+    <div className="admin-report-table-wrap">
+      <table className="admin-report-table admin-new-customers-table">
+        <thead><tr><th>Customer</th><th>Phone</th><th>Date of Birth</th><th>Registered On</th><th>Bookings</th></tr></thead>
+        <tbody>{customers.map(customer => <tr key={customer.phoneE164}><td><strong>{customer.name}</strong><small>{customer.email}</small></td><td>{customer.phone}</td><td>{formatDate(customer.dateOfBirth)}</td><td>{formatDate(customer.registeredAt)}</td><td>0</td></tr>)}</tbody>
+      </table>
+      {!loading && !customers.length && !error && <div className="admin-empty"><UserPlus size={22}/><span>No new customers match “{query}”.</span></div>}
+    </div>
+  </section>;
 }
 
 function AdminReportPanel({ customers }) {
