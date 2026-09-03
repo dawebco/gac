@@ -491,6 +491,9 @@
 .admin-new-customers-search { margin: 20px 0 14px; background: #fbfcfe; }
 .admin-new-customers-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; color: #64748b; font-size: 11px; font-weight: 700; }
 .admin-new-customers-toolbar .admin-primary-action:disabled { cursor: wait; opacity: .65; }
+.admin-new-customers-actions { display: flex; align-items: end; gap: 10px; }
+.admin-new-customers-actions .admin-date-picker-wrap { width: 180px; }
+.admin-new-customers-actions .admin-primary-action { min-height: 43px; white-space: nowrap; }
 .admin-new-customers-table { min-width: 760px; }
 .admin-new-customers-table th:nth-child(1) { width: 32%; }
 .admin-new-customers-table td small { display: block; margin-top: 3px; color: #7a889b; font-size: 9px; }
@@ -567,6 +570,8 @@
   .admin-report-preview > header { align-items: flex-start; flex-direction: column; }
   .admin-report-preview > header button { width: 100%; justify-content: center; }
   .admin-new-customers-toolbar { align-items: stretch; flex-direction: column; }
+  .admin-new-customers-actions { align-items: stretch; flex-direction: column; }
+  .admin-new-customers-actions .admin-date-picker-wrap,
   .admin-new-customers-toolbar .admin-primary-action { width: 100%; }
   .admin-report-result { padding: 10px; }
   .admin-report-table { min-width: 540px; }

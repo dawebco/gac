@@ -111,7 +111,12 @@ export const adminApi = {
     const rows = await apiRequest(`/admin/customers?search=${encodeURIComponent(search)}&limit=250`);
     return rows.map(mapAdminCustomer);
   },
-  newCustomers: (search = '', limit = 250) => apiRequest(`/admin/new-customers?search=${encodeURIComponent(search)}&limit=${limit}`),
+  newCustomers: (search = '', limit = 250, startDate = '', endDate = '') => {
+    const params = new URLSearchParams({ search, limit: String(limit) });
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    return apiRequest(`/admin/new-customers?${params.toString()}`);
+  },
   async customer(phone) {
     return mapAdminCustomer(await apiRequest(`/admin/customers/${encodeURIComponent(phone)}`));
   },

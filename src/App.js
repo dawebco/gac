@@ -1064,6 +1064,7 @@ function AdminDatePickerInput({
 
 function AdminNewCustomersPanel() {
   const [query, setQuery] = useState('');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -1075,7 +1076,7 @@ function AdminNewCustomersPanel() {
       setLoading(true);
       setError('');
       try {
-        const rows = await adminApi.newCustomers(query);
+        const rows = await adminApi.newCustomers(query, 250, dateRange.start, dateRange.end);
         if (!cancelled) setCustomers(rows);
       } catch (requestError) {
         if (!cancelled) {
@@ -1090,17 +1091,27 @@ function AdminNewCustomersPanel() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, dateRange]);
+
+  const setStartDate = start => setDateRange(current => ({
+    start,
+    end: start && current.end && current.end < start ? start : current.end,
+  }));
+  const setEndDate = end => setDateRange(current => ({
+    ...current,
+    end: current.start && end && end < current.start ? current.start : end,
+  }));
 
   const formatDate = value => value ? new Date(value).toLocaleDateString('en-IN') : '—';
   const downloadExcel = async () => {
     setDownloading(true);
     setError('');
     try {
-      const allCustomers = await adminApi.newCustomers('', 10000);
+      const allCustomers = await adminApi.newCustomers('', 10000, dateRange.start, dateRange.end);
       const escapeCell = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const customerRows = allCustomers.map(customer => `<tr><td>${escapeCell(customer.name)}</td><td>${escapeCell(customer.email)}</td><td>${escapeCell(customer.phone)}</td><td>${escapeCell(customer.dateOfBirth || '')}</td><td>${escapeCell(formatDate(customer.registeredAt))}</td><td>0</td></tr>`).join('');
-      const workbook = `<!doctype html><html><head><meta charset="UTF-8"><style>body{font-family:Arial,sans-serif}h1{color:#001735}table{border-collapse:collapse;width:100%}th{background:#001735;color:#fff}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}.meta td:first-child{font-weight:bold;background:#f8fafc}</style></head><body><h1>GAC Holidays New Customers</h1><table class="meta"><tr><td>Criteria</td><td>Self-registered customers with no bookings and no admin customer record</td></tr><tr><td>Generated</td><td>${escapeCell(new Date().toLocaleString('en-IN'))}</td></tr><tr><td>Total customers</td><td>${allCustomers.length}</td></tr></table><br><table><thead><tr><th>Customer Name</th><th>Email Address</th><th>Phone Number</th><th>Date of Birth</th><th>Registered On</th><th>Bookings</th></tr></thead><tbody>${customerRows}</tbody></table></body></html>`;
+      const dateRangeLabel = dateRange.start || dateRange.end ? `${dateRange.start || 'Beginning'} to ${dateRange.end || 'Today'}` : 'All registration dates';
+      const workbook = `<!doctype html><html><head><meta charset="UTF-8"><style>body{font-family:Arial,sans-serif}h1{color:#001735}table{border-collapse:collapse;width:100%}th{background:#001735;color:#fff}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}.meta td:first-child{font-weight:bold;background:#f8fafc}</style></head><body><h1>GAC Holidays New Customers</h1><table class="meta"><tr><td>Criteria</td><td>Self-registered customers with no bookings and no admin customer record</td></tr><tr><td>Registration date range</td><td>${escapeCell(dateRangeLabel)}</td></tr><tr><td>Generated</td><td>${escapeCell(new Date().toLocaleString('en-IN'))}</td></tr><tr><td>Total customers</td><td>${allCustomers.length}</td></tr></table><br><table><thead><tr><th>Customer Name</th><th>Email Address</th><th>Phone Number</th><th>Date of Birth</th><th>Registered On</th><th>Bookings</th></tr></thead><tbody>${customerRows}</tbody></table></body></html>`;
       const blob = new Blob(['\ufeff', workbook], { type: 'application/vnd.ms-excel;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -1120,7 +1131,7 @@ function AdminNewCustomersPanel() {
   return <section className="admin-form-card admin-new-customers-card">
     <header><i><UserPlus size={21}/></i><div><h2>New Customers</h2><p>Self-registered customers who have no bookings and are not yet in the admin customer register.</p></div></header>
     <label className="admin-search admin-new-customers-search"><Search size={19}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search by name, email or phone..." aria-label="Search new customers"/></label>
-    <div className="admin-new-customers-toolbar"><span>{loading ? 'Searching customers...' : `${customers.length} new customer${customers.length === 1 ? '' : 's'} found`}</span><button type="button" className="admin-primary-action" onClick={downloadExcel} disabled={downloading}><Download size={17}/>{downloading ? 'Preparing download...' : 'Download Excel'}</button></div>
+    <div className="admin-new-customers-toolbar"><span>{loading ? 'Searching customers...' : `${customers.length} new customer${customers.length === 1 ? '' : 's'} found`}</span><div className="admin-new-customers-actions"><AdminDatePickerInput label="Start Date" name="new-customer-start-date" value={dateRange.start} onChange={setStartDate} max={dateRange.end}/><AdminDatePickerInput label="End Date" name="new-customer-end-date" value={dateRange.end} onChange={setEndDate} min={dateRange.start}/><button type="button" className="admin-primary-action" onClick={downloadExcel} disabled={downloading}><Download size={17}/>{downloading ? 'Preparing download...' : 'Download Excel'}</button></div></div>
     {error && <p className="admin-form-message" role="alert">{error}</p>}
     <div className="admin-report-table-wrap">
       <table className="admin-report-table admin-new-customers-table">

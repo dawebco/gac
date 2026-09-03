@@ -78,7 +78,7 @@ export async function listAdminCustomers(search = '', limit = 100, offset = 0) {
  * Self-registered portal customers that have not been added to the admin
  * customer register and do not have any bookings yet.
  */
-export async function listNewPortalCustomers(search = '', limit = 250) {
+export async function listNewPortalCustomers(search = '', limit = 250, startDate?: string, endDate?: string) {
   const normalizedSearch = search.trim();
   const result = await query<NewPortalCustomerRow>(
     `SELECT profile.phone_e164, profile.full_name, profile.email, profile.date_of_birth, profile.registered_at
@@ -94,9 +94,11 @@ export async function listNewPortalCustomers(search = '', limit = 250) {
        AND ($1 = '' OR profile.full_name ILIKE '%' || $1 || '%'
          OR profile.email ILIKE '%' || $1 || '%'
          OR profile.phone_e164 LIKE '%' || regexp_replace($1, '[^0-9]', '', 'g') || '%')
+       AND ($3::date IS NULL OR profile.registered_at >= $3::date)
+       AND ($4::date IS NULL OR profile.registered_at < ($4::date + INTERVAL '1 day'))
      ORDER BY profile.registered_at DESC
      LIMIT $2`,
-    [normalizedSearch, limit],
+    [normalizedSearch, limit, startDate || null, endDate || null],
   );
   return result.rows.map(row => ({
     phoneE164: row.phone_e164,

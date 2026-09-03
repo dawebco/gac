@@ -167,8 +167,13 @@ adminRouter.get('/new-customers', async (request, response) => {
   const filters = z.object({
     search: z.string().max(150).default(''),
     limit: z.coerce.number().int().min(1).max(10_000).default(250),
+    startDate: z.string().date().optional(),
+    endDate: z.string().date().optional(),
   }).parse(request.query);
-  response.status(200).json({ data: await listNewPortalCustomers(filters.search, filters.limit) });
+  if (filters.startDate && filters.endDate && filters.endDate < filters.startDate) {
+    throw new ApiError(400, 'INVALID_DATE_RANGE', 'End date cannot be earlier than start date.');
+  }
+  response.status(200).json({ data: await listNewPortalCustomers(filters.search, filters.limit, filters.startDate, filters.endDate) });
 });
 
 adminRouter.post('/customers', requireCsrf, async (request, response) => {
