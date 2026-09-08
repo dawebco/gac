@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 import { query, withTransaction } from '../database/postgres';
+import { env } from '../config/env';
 import { ApiError } from '../shared/api-error';
 import type { AuditContext } from './customer.service';
 import { writeAdminAudit } from './audit.service';
+import { sendWhatsAppRewardTriggerMessage } from './whatsapp.service';
 
 type RewardRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
@@ -190,6 +192,74 @@ export async function reviewRewardAdjustmentRequest(input: {
     return mapRewardRequest(result.rows[0]!);
   };
   return transactionClient ? operation(transactionClient) : withTransaction(operation);
+}
+
+export async function syncRewardThresholdNotifications(phoneE164: string, availablePoints: number) {
+  const rewardsResult = await query<{ reward_id: string; points_required: number; title: string }>(
+    `SELECT reward_id, points_required, title
+     FROM reward_catalog
+     WHERE is_active = true
+     ORDER BY points_required ASC`,
+  );
+
+  if (rewardsResult.rows.length === 0) return;
+
+  const thresholdRewards = rewardsResult.rows.map((reward) => ({
+    ...reward,
+    pointsRequired: Number(reward.points_required),
+    thresholdPoints: Math.ceil(Number(reward.points_required) * 0.9),
+  }));
+
+  await withTransaction(async (client) => {
+    for (const reward of thresholdRewards) {
+      const stateResult = await client.query<{ is_notified: boolean }>(
+        `SELECT is_notified
+         FROM reward_threshold_notifications
+         WHERE phone_e164 = $1 AND reward_id = $2
+         FOR UPDATE`,
+        [phoneE164, reward.reward_id],
+      );
+      const existing = stateResult.rows[0];
+      const hasReachedThreshold = availablePoints >= reward.thresholdPoints;
+
+      if (hasReachedThreshold) {
+        if (!existing || existing.is_notified === false) {
+          if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {
+            await sendWhatsAppRewardTriggerMessage({
+              phoneE164,
+              rewardId: reward.reward_id,
+              rewardTitle: reward.title,
+              requiredPoints: reward.pointsRequired,
+              currentPoints: availablePoints,
+              thresholdPoints: reward.thresholdPoints,
+            });
+          }
+
+          await client.query(
+            `INSERT INTO reward_threshold_notifications (phone_e164, reward_id, threshold_points, is_notified, last_notified_at, updated_at)
+             VALUES ($1, $2, $3, true, now(), now())
+             ON CONFLICT (phone_e164, reward_id)
+             DO UPDATE SET threshold_points = EXCLUDED.threshold_points,
+                           is_notified = true,
+                           last_notified_at = now(),
+                           updated_at = now()`,
+            [phoneE164, reward.reward_id, reward.thresholdPoints],
+          );
+        }
+        continue;
+      }
+
+      if (existing && existing.is_notified) {
+        await client.query(
+          `UPDATE reward_threshold_notifications
+           SET is_notified = false,
+               updated_at = now()
+           WHERE phone_e164 = $1 AND reward_id = $2`,
+          [phoneE164, reward.reward_id],
+        );
+      }
+    }
+  });
 }
 
 export async function getUnifiedDashboard(phoneE164: string) {

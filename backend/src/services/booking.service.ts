@@ -4,6 +4,7 @@ import { query, withTransaction } from '../database/postgres';
 import { ApiError } from '../shared/api-error';
 import { writeAdminAudit } from './audit.service';
 import type { AuditContext } from './customer.service';
+import { syncRewardThresholdNotifications } from './reward.service';
 
 export type BookingType = 'FLIGHTS' | 'HOTELS' | 'HOLIDAYS';
 
@@ -85,6 +86,13 @@ export async function createBookingInTransaction(client: PoolClient, input: Crea
      VALUES ('BOOKING', $1, $2, 'BOOKING_CREATED', $3::jsonb)`,
     [booking.booking_id, input.phoneE164, JSON.stringify({ bookingId: booking.booking_id, pointsAwarded })],
   );
+
+  const balanceResult = await client.query<{ available_points: number }>(
+    'SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1',
+    [input.phoneE164],
+  );
+  const availablePoints = Number(balanceResult.rows[0]?.available_points ?? 0);
+  await syncRewardThresholdNotifications(input.phoneE164, availablePoints);
 
   return mapBooking(booking);
 }

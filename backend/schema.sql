@@ -325,6 +325,24 @@ CREATE TABLE IF NOT EXISTS customer_reward_balances (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS reward_threshold_notifications (
+  phone_e164 phone_e164 NOT NULL
+    REFERENCES reward_accounts(phone_e164)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  reward_id uuid NOT NULL
+    REFERENCES reward_catalog(reward_id)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  threshold_points integer NOT NULL CHECK (threshold_points > 0),
+  is_notified boolean NOT NULL DEFAULT false,
+  last_notified_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (phone_e164, reward_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reward_threshold_notifications_phone_state
+  ON reward_threshold_notifications(phone_e164, is_notified, updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS reward_adjustment_requests (
   request_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   phone_e164 phone_e164 NOT NULL
