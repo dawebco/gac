@@ -59,6 +59,17 @@ export async function sendWhatsAppOtpMessage(options: SendWhatsAppOtpOptions): P
             },
           ],
         },
+        {
+          type: 'button',
+          subtype: 'url',
+          index: 0,
+          parameters: [
+            {
+              type: 'text',
+              text: options.otp,
+            },
+          ],
+        },
       ],
     },
   };

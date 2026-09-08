@@ -105,16 +105,21 @@ portalRouter.post('/auth/send-otp', async (request, response, next) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     await redis.set(`otp:${phoneE164}`, otp, { ex: 300 });
 
+    const otpFailureMessage = 'We could not send the OTP to your WhatsApp number. Please try again in a minute.';
+
     if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {
       try {
         await sendWhatsAppOtpMessage({ phoneE164, otp });
+        response.status(200).json({ data: { message: 'OTP sent successfully to your WhatsApp number.' } });
+        return;
       } catch (err: any) {
         console.error('Failed to dispatch WhatsApp OTP:', err);
+        response.status(200).json({ data: { message: otpFailureMessage } });
+        return;
       }
-    } else {
-      console.log(`[OTP DEBUG] OTP for ${phoneE164} is: ${otp}`);
     }
 
+    console.log(`[OTP DEBUG] OTP for ${phoneE164} is: ${otp}`);
     response.status(200).json({ data: { message: 'OTP sent successfully to your WhatsApp number.' } });
   } catch (error) {
     next(error);
