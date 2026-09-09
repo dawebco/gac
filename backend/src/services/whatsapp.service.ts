@@ -22,7 +22,7 @@ export interface SendWhatsAppRewardThresholdOptions {
   requiredPoints: number;
   currentPoints: number;
   differencePoints: number;
-  imageUrl?: string | null;
+  imageUrl: string;
 }
 
 interface MetaApiResponse {
@@ -118,15 +118,6 @@ export async function sendWhatsAppRewardTriggerMessage(
   const recipient = options.phoneE164.replace(/[^0-9]/g, '');
   const url = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
-  const headerComponent = options.imageUrl
-    ? [{
-        type: 'header',
-        parameters: [{
-          type: 'image',
-          image: { link: options.imageUrl },
-        }],
-      }]
-    : [];
   const payload = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
@@ -138,7 +129,13 @@ export async function sendWhatsAppRewardTriggerMessage(
         code: env.WHATSAPP_TEMPLATE_LANGUAGE || 'en',
       },
       components: [
-        ...headerComponent,
+        {
+          type: 'header',
+          parameters: [{
+            type: 'image',
+            image: { link: options.imageUrl },
+          }],
+        },
         {
           type: 'body',
           parameters: [
