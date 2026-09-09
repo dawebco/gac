@@ -92,11 +92,15 @@ export async function createBookingInTransaction(client: PoolClient, input: Crea
 
 export async function createBooking(input: CreateBookingInput) {
   const booking = await withTransaction((client) => createBookingInTransaction(client, input));
-  const balanceResult = await query<{ available_points: number }>(
-    'SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1',
-    [input.phoneE164],
-  );
-  await syncRewardThresholdNotifications(input.phoneE164, Number(balanceResult.rows[0]?.available_points ?? 0));
+  try {
+    const balanceResult = await query<{ available_points: number }>(
+      'SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1',
+      [input.phoneE164],
+    );
+    await syncRewardThresholdNotifications(input.phoneE164, Number(balanceResult.rows[0]?.available_points ?? 0));
+  } catch (error) {
+    console.error('Reward threshold notification failed after booking creation:', error);
+  }
   return booking;
 }
 

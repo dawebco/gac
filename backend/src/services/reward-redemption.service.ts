@@ -163,7 +163,11 @@ export async function reviewRedemptionRequest(input: {
   });
 
   if (result.phoneE164 && result.availablePoints !== null) {
-    await syncRewardThresholdNotifications(result.phoneE164, result.availablePoints);
+    try {
+      await syncRewardThresholdNotifications(result.phoneE164, result.availablePoints);
+    } catch (error) {
+      console.error('Reward threshold notification failed after redemption approval:', error);
+    }
   }
   return { success: result.success, message: result.message };
 }
