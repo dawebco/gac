@@ -19,6 +19,7 @@ const requiredTables = [
   'reward_catalog',
   'reward_ledger',
   'reward_redemption_requests',
+  'reward_threshold_notifications',
   'reward_rules',
 ] as const;
 
