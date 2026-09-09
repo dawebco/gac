@@ -24,6 +24,24 @@ export interface SendWhatsAppRewardThresholdOptions {
   differencePoints: number;
 }
 
+const publicRewardBaseUrl = 'https://reward.gacholidays.com';
+const fallbackTriggerImageUrl = `${publicRewardBaseUrl}/logo-1.png`;
+
+async function resolveTriggerImageUrl(rewardTitle: string): Promise<string> {
+  const rewardImageUrl = `${publicRewardBaseUrl}/reward_images/${encodeURIComponent(`${rewardTitle}.png`)}`;
+
+  try {
+    const response = await fetch(rewardImageUrl, { method: 'HEAD' });
+    if (response.ok && response.headers.get('content-type')?.startsWith('image/')) {
+      return rewardImageUrl;
+    }
+  } catch (error) {
+    console.warn('Reward image lookup failed; using the trigger fallback image:', error);
+  }
+
+  return fallbackTriggerImageUrl;
+}
+
 interface MetaApiResponse {
   messaging_product?: string;
   contacts?: Array<{ input: string; wa_id: string }>;
@@ -116,7 +134,7 @@ export async function sendWhatsAppRewardTriggerMessage(
 
   const recipient = options.phoneE164.replace(/[^0-9]/g, '');
   const url = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-  const triggerImageUrl = 'https://reward.gacholidays.com/logo-1.png';
+  const triggerImageUrl = await resolveTriggerImageUrl(options.rewardTitle);
 
   const payload = {
     messaging_product: 'whatsapp',
