@@ -199,10 +199,8 @@ export async function syncRewardThresholdNotifications(phoneE164: string, availa
     reward_id: string;
     points_required: number;
     title: string;
-    image_url: string | null;
-    image_storage_path: string | null;
   }>(
-    `SELECT reward_id, points_required, title, image_url, image_storage_path
+    `SELECT reward_id, points_required, title
      FROM reward_catalog
      WHERE is_active = true
      ORDER BY points_required ASC`,
@@ -214,12 +212,6 @@ export async function syncRewardThresholdNotifications(phoneE164: string, availa
     ...reward,
     pointsRequired: Number(reward.points_required),
     thresholdPoints: Math.ceil(Number(reward.points_required) * 0.9),
-    publicImageUrl: reward.image_url || (reward.image_storage_path
-      ? `${env.SUPABASE_URL}/storage/v1/object/public/reward-images/${reward.image_storage_path
-        .split('/')
-        .map(encodeURIComponent)
-        .join('/')}`
-      : null),
   }));
 
   await withTransaction(async (client) => {
@@ -238,9 +230,6 @@ export async function syncRewardThresholdNotifications(phoneE164: string, availa
       if (isInTriggerWindow) {
         if (!existing || existing.is_notified === false) {
           if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {
-            if (!reward.publicImageUrl) {
-              throw new ApiError(409, 'REWARD_IMAGE_MISSING', `Reward ${reward.reward_id} has no public image URL.`);
-            }
             await sendWhatsAppRewardTriggerMessage({
               phoneE164,
               rewardId: reward.reward_id,
@@ -248,7 +237,6 @@ export async function syncRewardThresholdNotifications(phoneE164: string, availa
               requiredPoints: reward.pointsRequired,
               currentPoints: availablePoints,
               differencePoints: reward.pointsRequired - availablePoints,
-              imageUrl: reward.publicImageUrl,
             });
           }
 

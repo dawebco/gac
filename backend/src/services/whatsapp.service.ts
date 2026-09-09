@@ -22,7 +22,6 @@ export interface SendWhatsAppRewardThresholdOptions {
   requiredPoints: number;
   currentPoints: number;
   differencePoints: number;
-  imageUrl: string;
 }
 
 interface MetaApiResponse {
@@ -117,6 +116,7 @@ export async function sendWhatsAppRewardTriggerMessage(
 
   const recipient = options.phoneE164.replace(/[^0-9]/g, '');
   const url = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const triggerImageUrl = 'https://reward.gacholidays.com/logo-1.png';
 
   const payload = {
     messaging_product: 'whatsapp',
@@ -133,7 +133,7 @@ export async function sendWhatsAppRewardTriggerMessage(
           type: 'header',
           parameters: [{
             type: 'image',
-            image: { link: options.imageUrl },
+            image: { link: triggerImageUrl },
           }],
         },
         {
