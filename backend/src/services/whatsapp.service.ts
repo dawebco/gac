@@ -21,7 +21,8 @@ export interface SendWhatsAppRewardThresholdOptions {
   rewardId: string;
   requiredPoints: number;
   currentPoints: number;
-  thresholdPoints: number;
+  differencePoints: number;
+  imageUrl?: string | null;
 }
 
 interface MetaApiResponse {
@@ -117,31 +118,27 @@ export async function sendWhatsAppRewardTriggerMessage(
   const recipient = options.phoneE164.replace(/[^0-9]/g, '');
   const url = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
-  const buttonComponent = env.WHATSAPP_TRIGGER_BUTTON_URL
+  const headerComponent = options.imageUrl
     ? [{
-        type: 'button',
-        sub_type: 'url',
-        index: 0,
-        parameters: [
-          {
-            type: 'text',
-            text: env.WHATSAPP_TRIGGER_BUTTON_URL,
-          },
-        ],
+        type: 'header',
+        parameters: [{
+          type: 'image',
+          image: { link: options.imageUrl },
+        }],
       }]
     : [];
-
   const payload = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to: recipient,
     type: 'template',
     template: {
-      name: env.WHATSAPP_TEMPLATE_NAME_TRIGGER || 'trigger',
+      name: env.WHATSAPP_TEMPLATE_NAME_TRIGGER || 'triggers',
       language: {
         code: env.WHATSAPP_TEMPLATE_LANGUAGE || 'en',
       },
       components: [
+        ...headerComponent,
         {
           type: 'body',
           parameters: [
@@ -155,11 +152,14 @@ export async function sendWhatsAppRewardTriggerMessage(
             },
             {
               type: 'text',
-              text: String(options.thresholdPoints),
+              text: String(options.differencePoints),
+            },
+            {
+              type: 'text',
+              text: String(options.requiredPoints),
             },
           ],
         },
-        ...buttonComponent,
       ],
     },
   };

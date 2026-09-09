@@ -87,18 +87,17 @@ export async function createBookingInTransaction(client: PoolClient, input: Crea
     [booking.booking_id, input.phoneE164, JSON.stringify({ bookingId: booking.booking_id, pointsAwarded })],
   );
 
-  const balanceResult = await client.query<{ available_points: number }>(
-    'SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1',
-    [input.phoneE164],
-  );
-  const availablePoints = Number(balanceResult.rows[0]?.available_points ?? 0);
-  await syncRewardThresholdNotifications(input.phoneE164, availablePoints);
-
   return mapBooking(booking);
 }
 
 export async function createBooking(input: CreateBookingInput) {
-  return withTransaction((client) => createBookingInTransaction(client, input));
+  const booking = await withTransaction((client) => createBookingInTransaction(client, input));
+  const balanceResult = await query<{ available_points: number }>(
+    'SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1',
+    [input.phoneE164],
+  );
+  await syncRewardThresholdNotifications(input.phoneE164, Number(balanceResult.rows[0]?.available_points ?? 0));
+  return booking;
 }
 
 export async function listBookings(phoneE164: string) {

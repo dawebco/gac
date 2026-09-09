@@ -51,8 +51,7 @@ const envSchema = z.object({
   WHATSAPP_CLOUD_API_TOKEN: z.string().trim().optional(),
   WHATSAPP_TEMPLATE_NAME_OTP: z.string().trim().default('otp'),
   WHATSAPP_TEMPLATE_NAME_REWARDS: z.string().trim().default('gac_booking_rewards'),
-  WHATSAPP_TEMPLATE_NAME_TRIGGER: z.string().trim().default('trigger'),
-  WHATSAPP_TRIGGER_BUTTON_URL: z.string().url().optional(),
+  WHATSAPP_TEMPLATE_NAME_TRIGGER: z.string().trim().default('triggers'),
   WHATSAPP_TEMPLATE_LANGUAGE: z.string().trim().default('en'),
   WHATSAPP_GRAPH_VERSION: z.string().trim().default('v20.0'),
 });

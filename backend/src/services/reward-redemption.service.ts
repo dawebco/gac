@@ -121,7 +121,7 @@ export async function reviewRedemptionRequest(input: {
   reviewNote?: string;
   audit: AuditContext;
 }) {
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const requestResult = await client.query<RedemptionRequestRow>(
       "SELECT request_id, phone_e164, reward_id, points_at_request FROM reward_redemption_requests WHERE request_id = $1 AND request_status = 'PENDING' FOR UPDATE",
       [input.requestId],
@@ -137,7 +137,7 @@ export async function reviewRedemptionRequest(input: {
         [input.audit.adminUsername, input.reviewNote, input.requestId],
       );
       await writeAdminAudit(client, { ...input.audit, action: 'REDEMPTION_REJECTED', entityType: 'REWARD_REDEMPTION', entityId: input.requestId });
-      return { success: true, message: 'Request rejected.' };
+      return { success: true, message: 'Request rejected.', phoneE164: null, availablePoints: null };
     }
 
     // Handle APPROVE
@@ -158,12 +158,14 @@ export async function reviewRedemptionRequest(input: {
     await client.query(`UPDATE reward_redemption_requests SET request_status = 'APPROVED', reviewed_by_admin = $1, reviewed_at = now(), review_note = $2, ledger_entry_id = $3 WHERE request_id = $4`, [input.audit.adminUsername, input.reviewNote, ledgerEntryId, input.requestId]);
     await writeAdminAudit(client, { ...input.audit, action: 'REDEMPTION_APPROVED', entityType: 'REWARD_REDEMPTION', entityId: input.requestId });
 
-    const balanceResultAfter = await client.query<RewardBalanceRow>('SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1', [request.phone_e164]);
-    const availablePoints = Number(balanceResultAfter.rows[0]?.available_points ?? 0);
-    await syncRewardThresholdNotifications(request.phone_e164, availablePoints);
-
-    return { success: true, message: 'Request approved.' };
+    const availablePoints = Number(balanceResult.rows[0].available_points) - request.points_at_request;
+    return { success: true, message: 'Request approved.', phoneE164: request.phone_e164, availablePoints };
   });
+
+  if (result.phoneE164 && result.availablePoints !== null) {
+    await syncRewardThresholdNotifications(result.phoneE164, result.availablePoints);
+  }
+  return { success: result.success, message: result.message };
 }
 
 interface CustomerRedemptionRow {

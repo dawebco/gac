@@ -195,8 +195,8 @@ export async function reviewRewardAdjustmentRequest(input: {
 }
 
 export async function syncRewardThresholdNotifications(phoneE164: string, availablePoints: number) {
-  const rewardsResult = await query<{ reward_id: string; points_required: number; title: string }>(
-    `SELECT reward_id, points_required, title
+  const rewardsResult = await query<{ reward_id: string; points_required: number; title: string; image_url: string | null }>(
+    `SELECT reward_id, points_required, title, image_url
      FROM reward_catalog
      WHERE is_active = true
      ORDER BY points_required ASC`,
@@ -220,9 +220,10 @@ export async function syncRewardThresholdNotifications(phoneE164: string, availa
         [phoneE164, reward.reward_id],
       );
       const existing = stateResult.rows[0];
-      const hasReachedThreshold = availablePoints >= reward.thresholdPoints;
+      const isInTriggerWindow = availablePoints >= reward.thresholdPoints
+        && availablePoints < reward.pointsRequired;
 
-      if (hasReachedThreshold) {
+      if (isInTriggerWindow) {
         if (!existing || existing.is_notified === false) {
           if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {
             await sendWhatsAppRewardTriggerMessage({
@@ -231,7 +232,8 @@ export async function syncRewardThresholdNotifications(phoneE164: string, availa
               rewardTitle: reward.title,
               requiredPoints: reward.pointsRequired,
               currentPoints: availablePoints,
-              thresholdPoints: reward.thresholdPoints,
+              differencePoints: reward.pointsRequired - availablePoints,
+              imageUrl: reward.image_url,
             });
           }
 
