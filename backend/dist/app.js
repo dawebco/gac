@@ -84058,8 +84058,9 @@ var envSchema = external_exports.object({
   COOKIE_SAME_SITE: external_exports.enum(["lax", "strict", "none"]).default("lax"),
   WHATSAPP_PHONE_NUMBER_ID: external_exports.string().trim().optional(),
   WHATSAPP_CLOUD_API_TOKEN: external_exports.string().trim().optional(),
-  WHATSAPP_TEMPLATE_NAME_OTP: external_exports.string().trim().default("gac_holidays"),
+  WHATSAPP_TEMPLATE_NAME_OTP: external_exports.string().trim().default("otp"),
   WHATSAPP_TEMPLATE_NAME_REWARDS: external_exports.string().trim().default("gac_booking_rewards"),
+  WHATSAPP_TEMPLATE_NAME_TRIGGER: external_exports.string().trim().default("triggers"),
   WHATSAPP_TEMPLATE_LANGUAGE: external_exports.string().trim().default("en"),
   WHATSAPP_GRAPH_VERSION: external_exports.string().trim().default("v20.0")
 });
@@ -90708,7 +90709,7 @@ function nationalPhone(phoneE164) {
 }
 
 // src/services/booking.service.ts
-var import_node_crypto4 = require("node:crypto");
+var import_node_crypto5 = require("node:crypto");
 
 // src/services/audit.service.ts
 async function writeAdminAudit(client, input) {
@@ -90732,6 +90733,438 @@ async function writeAdminAudit(client, input) {
   );
 }
 
+// src/services/reward.service.ts
+var import_node_crypto4 = require("node:crypto");
+
+// src/services/whatsapp.service.ts
+var publicRewardBaseUrl = "https://reward.gacholidays.com";
+var fallbackTriggerImageUrl = `${publicRewardBaseUrl}/logo-1.png`;
+async function resolveTriggerImageUrl(rewardTitle) {
+  const rewardImageUrl = `${publicRewardBaseUrl}/reward_images/${encodeURIComponent(`${rewardTitle}.png`)}`;
+  try {
+    const response = await fetch(rewardImageUrl, { method: "HEAD" });
+    if (response.ok && response.headers.get("content-type")?.startsWith("image/")) {
+      return rewardImageUrl;
+    }
+  } catch (error51) {
+    console.warn("Reward image lookup failed; using the trigger fallback image:", error51);
+  }
+  return fallbackTriggerImageUrl;
+}
+async function sendWhatsAppOtpMessage(options) {
+  if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_CLOUD_API_TOKEN) {
+    throw new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp Cloud API credentials are not configured.");
+  }
+  const recipient = options.phoneE164.replace(/[^0-9]/g, "");
+  const url2 = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: "template",
+    template: {
+      name: env.WHATSAPP_TEMPLATE_NAME_OTP,
+      language: {
+        code: env.WHATSAPP_TEMPLATE_LANGUAGE
+      },
+      components: [
+        {
+          type: "body",
+          parameters: [
+            {
+              type: "text",
+              text: options.otp
+            }
+          ]
+        },
+        {
+          type: "button",
+          sub_type: "url",
+          index: 0,
+          parameters: [
+            {
+              type: "text",
+              text: options.otp
+            }
+          ]
+        }
+      ]
+    }
+  };
+  const response = await fetch(url2, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.WHATSAPP_CLOUD_API_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok || result.error) {
+    const errorMsg = result.error?.message || `Meta WhatsApp API failed with status ${response.status}`;
+    console.error("WhatsApp OTP API error:", result.error || result);
+    throw new ApiError(502, "WHATSAPP_SEND_FAILED", errorMsg, result.error);
+  }
+  const messageId = result.messages?.[0]?.id || "unknown";
+  return { messageId };
+}
+async function sendWhatsAppRewardTriggerMessage(options) {
+  if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_CLOUD_API_TOKEN) {
+    throw new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp Cloud API credentials are not configured.");
+  }
+  const recipient = options.phoneE164.replace(/[^0-9]/g, "");
+  const url2 = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const triggerImageUrl = await resolveTriggerImageUrl(options.rewardTitle);
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: "template",
+    template: {
+      name: env.WHATSAPP_TEMPLATE_NAME_TRIGGER || "triggers",
+      language: {
+        code: env.WHATSAPP_TEMPLATE_LANGUAGE || "en"
+      },
+      components: [
+        {
+          type: "header",
+          parameters: [{
+            type: "image",
+            image: { link: triggerImageUrl }
+          }]
+        },
+        {
+          type: "body",
+          parameters: [
+            {
+              type: "text",
+              text: String(options.rewardTitle)
+            },
+            {
+              type: "text",
+              text: String(options.currentPoints)
+            },
+            {
+              type: "text",
+              text: String(options.differencePoints)
+            },
+            {
+              type: "text",
+              text: String(options.requiredPoints)
+            }
+          ]
+        }
+      ]
+    }
+  };
+  const response = await fetch(url2, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.WHATSAPP_CLOUD_API_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok || result.error) {
+    const errorMsg = result.error?.message || `Meta WhatsApp API failed with status ${response.status}`;
+    console.error("WhatsApp Trigger API error:", result.error || result);
+    throw new ApiError(502, "WHATSAPP_SEND_FAILED", errorMsg, result.error);
+  }
+  const messageId = result.messages?.[0]?.id || "unknown";
+  return { messageId };
+}
+async function sendWhatsAppBookingRewardMessage(options) {
+  if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_CLOUD_API_TOKEN) {
+    throw new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp Cloud API credentials are not configured.");
+  }
+  const recipient = options.phoneE164.replace(/[^0-9]/g, "");
+  const url2 = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const normalizedType = String(options.bookingType || "").toUpperCase();
+  const imageFileName = normalizedType.includes("FLIGHT") ? "flight.png" : normalizedType.includes("HOTEL") ? "hotel.png" : "holiday-v2.png";
+  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || "https://reward.gacholidays.com").replace(/\/$/, "");
+  const headerImageUrl = options.imageUrl || `${publicBaseUrl}/images/${imageFileName}`;
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: "template",
+    template: {
+      name: env.WHATSAPP_TEMPLATE_NAME_REWARDS || "gac_booking_rewards",
+      language: {
+        code: env.WHATSAPP_TEMPLATE_LANGUAGE || "en"
+      },
+      components: [
+        {
+          type: "header",
+          parameters: [
+            {
+              type: "image",
+              image: {
+                link: headerImageUrl
+              }
+            }
+          ]
+        },
+        {
+          type: "body",
+          parameters: [
+            {
+              type: "text",
+              text: String(options.customerName)
+            },
+            {
+              type: "text",
+              text: String(options.pointsEarned)
+            },
+            {
+              type: "text",
+              text: String(options.totalBalance)
+            }
+          ]
+        }
+      ]
+    }
+  };
+  const response = await fetch(url2, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.WHATSAPP_CLOUD_API_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok || result.error) {
+    const errorMsg = result.error?.message || `Meta WhatsApp API failed with status ${response.status}`;
+    console.error("WhatsApp Reward API error:", result.error || result);
+    throw new ApiError(502, "WHATSAPP_SEND_FAILED", errorMsg, result.error);
+  }
+  const messageId = result.messages?.[0]?.id || "unknown";
+  return { messageId };
+}
+
+// src/services/reward.service.ts
+function mapRewardRequest(row) {
+  return {
+    id: row.request_id,
+    phoneE164: row.phone_e164,
+    customerName: row.display_name,
+    direction: row.direction,
+    points: Number(row.points),
+    reason: row.reason,
+    pointsAtRequest: Number(row.current_points_at_request),
+    currentPoints: Number(row.current_points),
+    status: row.request_status,
+    requestedBy: row.requested_by,
+    requestedAt: row.requested_at,
+    reviewedBy: row.reviewed_by,
+    reviewedAt: row.reviewed_at,
+    reviewNote: row.review_note,
+    ledgerEntryId: row.ledger_entry_id
+  };
+}
+var rewardRequestSelect = `
+  SELECT request.request_id, request.phone_e164, customer.display_name,
+         request.direction, request.points, request.reason, request.current_points_at_request,
+         COALESCE(balance.available_points, 0)::integer AS current_points,
+         request.request_status, request.requested_by, request.requested_at,
+         request.reviewed_by, request.reviewed_at, request.review_note, request.ledger_entry_id
+  FROM reward_adjustment_requests AS request
+  JOIN admin_customer_records AS customer ON customer.phone_e164 = request.phone_e164
+  LEFT JOIN customer_reward_balances AS balance ON balance.phone_e164 = request.phone_e164`;
+async function requestRewardAdjustment(input, transactionClient) {
+  const operation = async (client) => {
+    const customer = await client.query(
+      `SELECT 1 FROM admin_customer_records WHERE phone_e164 = $1 AND record_status = 'ACTIVE'`,
+      [input.phoneE164]
+    );
+    if (!customer.rowCount) throw new ApiError(404, "CUSTOMER_NOT_FOUND", "Customer record not found.");
+    const balanceResult = await client.query(
+      "SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1",
+      [input.phoneE164]
+    );
+    const previousBalance = Number(balanceResult.rows[0]?.available_points ?? 0);
+    if (input.direction === "REMOVE" && input.points > previousBalance) {
+      throw new ApiError(409, "INSUFFICIENT_REWARD_BALANCE", "Points to remove cannot exceed the available balance.");
+    }
+    const idempotencyKey = input.idempotencyKey ?? (0, import_node_crypto4.randomUUID)();
+    const requestResult = await client.query(
+      `INSERT INTO reward_adjustment_requests (
+        phone_e164, direction, points, reason, current_points_at_request, requested_by, idempotency_key
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING request_id, requested_at`,
+      [input.phoneE164, input.direction, input.points, input.reason, previousBalance, input.adminUsername, idempotencyKey]
+    );
+    await writeAdminAudit(client, {
+      ...input.audit,
+      action: "REWARD_ADJUSTMENT_REQUESTED",
+      entityType: "REWARD_ADJUSTMENT_REQUEST",
+      entityId: requestResult.rows[0].request_id,
+      beforeData: { availablePoints: previousBalance },
+      afterData: { direction: input.direction, points: input.points, status: "PENDING" },
+      reason: input.reason
+    });
+    return {
+      requestId: requestResult.rows[0].request_id,
+      status: "PENDING",
+      direction: input.direction,
+      points: input.points,
+      availablePoints: previousBalance,
+      requestedAt: requestResult.rows[0].requested_at
+    };
+  };
+  return transactionClient ? operation(transactionClient) : withTransaction(operation);
+}
+async function listRewardAdjustmentRequests(status = "PENDING") {
+  const where = status === "ALL" ? "" : "WHERE request.request_status = $1";
+  const values = status === "ALL" ? [] : [status];
+  const result = await query(
+    `${rewardRequestSelect} ${where} ORDER BY request.requested_at DESC LIMIT 500`,
+    values
+  );
+  return result.rows.map(mapRewardRequest);
+}
+async function reviewRewardAdjustmentRequest(input, transactionClient) {
+  const operation = async (client) => {
+    const requestResult = await client.query(
+      `SELECT request_id, phone_e164, direction, points, reason, request_status, requested_by
+       FROM reward_adjustment_requests WHERE request_id = $1 FOR UPDATE`,
+      [input.requestId]
+    );
+    const request = requestResult.rows[0];
+    if (!request) throw new ApiError(404, "REWARD_REQUEST_NOT_FOUND", "Reward adjustment request not found.");
+    if (request.request_status !== "PENDING") {
+      throw new ApiError(409, "REWARD_REQUEST_ALREADY_REVIEWED", "This reward request has already been reviewed.");
+    }
+    let ledgerEntryId = null;
+    let availablePoints;
+    const balanceResult = await client.query(
+      "SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1 FOR UPDATE",
+      [request.phone_e164]
+    );
+    const previousBalance = Number(balanceResult.rows[0]?.available_points ?? 0);
+    availablePoints = previousBalance;
+    if (input.decision === "APPROVE") {
+      if (request.direction === "REMOVE" && request.points > previousBalance) {
+        throw new ApiError(409, "INSUFFICIENT_REWARD_BALANCE", "This customer no longer has enough points for the requested deduction.");
+      }
+      const delta = request.direction === "ADD" ? request.points : -request.points;
+      const entryType = request.direction === "ADD" ? "ADMIN_CREDIT" : "ADMIN_DEBIT";
+      const ledgerResult = await client.query(
+        `INSERT INTO reward_ledger (
+          phone_e164, entry_type, points_delta, reason, source, idempotency_key, created_by
+        ) VALUES ($1, $2, $3, $4, 'ADMIN', $5, $6) RETURNING entry_id`,
+        [request.phone_e164, entryType, delta, request.reason, `reward-request:${request.request_id}`, input.superAdminUsername]
+      );
+      ledgerEntryId = ledgerResult.rows[0].entry_id;
+      availablePoints = previousBalance + delta;
+    }
+    const status = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
+    await client.query(
+      `UPDATE reward_adjustment_requests
+       SET request_status = $2, reviewed_by = $3, reviewed_at = now(), review_note = $4, ledger_entry_id = $5
+       WHERE request_id = $1`,
+      [request.request_id, status, input.superAdminUsername, input.reviewNote ?? null, ledgerEntryId]
+    );
+    await writeAdminAudit(client, {
+      ...input.audit,
+      action: `REWARD_ADJUSTMENT_${status}`,
+      entityType: "REWARD_ADJUSTMENT_REQUEST",
+      entityId: request.request_id,
+      beforeData: { status: "PENDING", availablePoints: previousBalance },
+      afterData: { status, availablePoints, ledgerEntryId },
+      reason: input.reviewNote || request.reason
+    });
+    const result = await client.query(
+      `${rewardRequestSelect} WHERE request.request_id = $1`,
+      [request.request_id]
+    );
+    return mapRewardRequest(result.rows[0]);
+  };
+  return transactionClient ? operation(transactionClient) : withTransaction(operation);
+}
+async function syncRewardThresholdNotifications(phoneE164, availablePoints) {
+  const rewardsResult = await query(
+    `SELECT reward_id, points_required, title
+     FROM reward_catalog
+     WHERE is_active = true
+     ORDER BY points_required ASC`
+  );
+  if (rewardsResult.rows.length === 0) return;
+  const thresholdRewards = rewardsResult.rows.map((reward) => ({
+    ...reward,
+    pointsRequired: Number(reward.points_required),
+    thresholdPoints: Math.ceil(Number(reward.points_required) * 0.9)
+  }));
+  await withTransaction(async (client) => {
+    for (const reward of thresholdRewards) {
+      const stateResult = await client.query(
+        `SELECT is_notified
+         FROM reward_threshold_notifications
+         WHERE phone_e164 = $1 AND reward_id = $2
+         FOR UPDATE`,
+        [phoneE164, reward.reward_id]
+      );
+      const existing = stateResult.rows[0];
+      const isInTriggerWindow = availablePoints >= reward.thresholdPoints && availablePoints < reward.pointsRequired;
+      if (isInTriggerWindow) {
+        if (!existing || existing.is_notified === false) {
+          if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {
+            await sendWhatsAppRewardTriggerMessage({
+              phoneE164,
+              rewardId: reward.reward_id,
+              rewardTitle: reward.title,
+              requiredPoints: reward.pointsRequired,
+              currentPoints: availablePoints,
+              differencePoints: reward.pointsRequired - availablePoints
+            });
+          }
+          await client.query(
+            `INSERT INTO reward_threshold_notifications (phone_e164, reward_id, threshold_points, is_notified, last_notified_at, updated_at)
+             VALUES ($1, $2, $3, true, now(), now())
+             ON CONFLICT (phone_e164, reward_id)
+             DO UPDATE SET threshold_points = EXCLUDED.threshold_points,
+                           is_notified = true,
+                           last_notified_at = now(),
+                           updated_at = now()`,
+            [phoneE164, reward.reward_id, reward.thresholdPoints]
+          );
+        }
+        continue;
+      }
+      if (existing && existing.is_notified) {
+        await client.query(
+          `UPDATE reward_threshold_notifications
+           SET is_notified = false,
+               updated_at = now()
+           WHERE phone_e164 = $1 AND reward_id = $2`,
+          [phoneE164, reward.reward_id]
+        );
+      }
+    }
+  });
+}
+async function getUnifiedDashboard(phoneE164) {
+  const result = await query(
+    `SELECT phone_e164, total_bookings, available_points, total_points_earned,
+            total_points_redeemed, balance_version, updated_at
+     FROM customer_dashboard_summary WHERE phone_e164 = $1`,
+    [phoneE164]
+  );
+  const row = result.rows[0];
+  if (!row) throw new ApiError(404, "CUSTOMER_NOT_FOUND", "Customer identity not found.");
+  return {
+    phoneE164: row.phone_e164,
+    totalBookings: Number(row.total_bookings),
+    availablePoints: Number(row.available_points),
+    totalPointsEarned: Number(row.total_points_earned),
+    totalPointsRedeemed: Number(row.total_points_redeemed),
+    balanceVersion: Number(row.balance_version),
+    updatedAt: row.updated_at
+  };
+}
+
 // src/services/booking.service.ts
 async function createBookingInTransaction(client, input) {
   const customer = await client.query(
@@ -90751,7 +91184,7 @@ async function createBookingInTransaction(client, input) {
   const rule = ruleResult.rows[0];
   if (!rule) throw new ApiError(409, "REWARD_RULE_MISSING", "No active reward rule exists for this booking type and date.");
   const pointsAwarded = Math.floor(input.purchasedAmount / Number(rule.rupees_per_point));
-  const bookingReference = `GAC-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "")}-${(0, import_node_crypto4.randomUUID)().slice(0, 8).toUpperCase()}`;
+  const bookingReference = `GAC-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "")}-${(0, import_node_crypto5.randomUUID)().slice(0, 8).toUpperCase()}`;
   const bookingResult = await client.query(
     `INSERT INTO bookings (
       booking_reference, phone_e164, reward_rule_id, booking_type, purchased_amount,
@@ -90791,7 +91224,17 @@ async function createBookingInTransaction(client, input) {
   return mapBooking(booking);
 }
 async function createBooking(input) {
-  return withTransaction((client) => createBookingInTransaction(client, input));
+  const booking = await withTransaction((client) => createBookingInTransaction(client, input));
+  try {
+    const balanceResult = await query(
+      "SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1",
+      [input.phoneE164]
+    );
+    await syncRewardThresholdNotifications(input.phoneE164, Number(balanceResult.rows[0]?.available_points ?? 0));
+  } catch (error51) {
+    console.error("Reward threshold notification failed after booking creation:", error51);
+  }
+  return booking;
 }
 async function listBookings(phoneE164) {
   const result = await query(
@@ -98783,6 +99226,37 @@ async function listAdminCustomers(search = "", limit = 100, offset = 0) {
   );
   return result.rows.map(mapCustomer);
 }
+async function listNewPortalCustomers(search = "", limit = 250, startDate, endDate) {
+  const normalizedSearch = search.trim();
+  const result = await query(
+    `SELECT profile.phone_e164, profile.full_name, profile.email, profile.date_of_birth, profile.registered_at
+     FROM portal_customer_profiles profile
+     WHERE NOT EXISTS (
+       SELECT 1 FROM admin_customer_records admin_record
+       WHERE admin_record.phone_e164 = profile.phone_e164
+     )
+       AND NOT EXISTS (
+         SELECT 1 FROM bookings booking
+         WHERE booking.phone_e164 = profile.phone_e164
+       )
+       AND ($1 = '' OR profile.full_name ILIKE '%' || $1 || '%'
+         OR profile.email ILIKE '%' || $1 || '%'
+         OR profile.phone_e164 LIKE '%' || regexp_replace($1, '[^0-9]', '', 'g') || '%')
+       AND ($3::date IS NULL OR profile.registered_at >= $3::date)
+       AND ($4::date IS NULL OR profile.registered_at < ($4::date + INTERVAL '1 day'))
+     ORDER BY profile.registered_at DESC
+     LIMIT $2`,
+    [normalizedSearch, limit, startDate || null, endDate || null]
+  );
+  return result.rows.map((row) => ({
+    phoneE164: row.phone_e164,
+    phone: nationalPhone(row.phone_e164),
+    name: row.full_name,
+    email: row.email,
+    dateOfBirth: row.date_of_birth,
+    registeredAt: row.registered_at
+  }));
+}
 async function getAdminCustomer(phoneInput, client) {
   const phoneE164 = normalizeIndianPhone(phoneInput);
   const statement = `${customerSelect} WHERE record.phone_e164 = $1 AND record.record_status = 'ACTIVE' LIMIT 1`;
@@ -99181,167 +99655,6 @@ async function reviewCustomerDeletionRequest(input) {
   });
 }
 
-// src/services/reward.service.ts
-var import_node_crypto5 = require("node:crypto");
-function mapRewardRequest(row) {
-  return {
-    id: row.request_id,
-    phoneE164: row.phone_e164,
-    customerName: row.display_name,
-    direction: row.direction,
-    points: Number(row.points),
-    reason: row.reason,
-    pointsAtRequest: Number(row.current_points_at_request),
-    currentPoints: Number(row.current_points),
-    status: row.request_status,
-    requestedBy: row.requested_by,
-    requestedAt: row.requested_at,
-    reviewedBy: row.reviewed_by,
-    reviewedAt: row.reviewed_at,
-    reviewNote: row.review_note,
-    ledgerEntryId: row.ledger_entry_id
-  };
-}
-var rewardRequestSelect = `
-  SELECT request.request_id, request.phone_e164, customer.display_name,
-         request.direction, request.points, request.reason, request.current_points_at_request,
-         COALESCE(balance.available_points, 0)::integer AS current_points,
-         request.request_status, request.requested_by, request.requested_at,
-         request.reviewed_by, request.reviewed_at, request.review_note, request.ledger_entry_id
-  FROM reward_adjustment_requests AS request
-  JOIN admin_customer_records AS customer ON customer.phone_e164 = request.phone_e164
-  LEFT JOIN customer_reward_balances AS balance ON balance.phone_e164 = request.phone_e164`;
-async function requestRewardAdjustment(input, transactionClient) {
-  const operation = async (client) => {
-    const customer = await client.query(
-      `SELECT 1 FROM admin_customer_records WHERE phone_e164 = $1 AND record_status = 'ACTIVE'`,
-      [input.phoneE164]
-    );
-    if (!customer.rowCount) throw new ApiError(404, "CUSTOMER_NOT_FOUND", "Customer record not found.");
-    const balanceResult = await client.query(
-      "SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1",
-      [input.phoneE164]
-    );
-    const previousBalance = Number(balanceResult.rows[0]?.available_points ?? 0);
-    if (input.direction === "REMOVE" && input.points > previousBalance) {
-      throw new ApiError(409, "INSUFFICIENT_REWARD_BALANCE", "Points to remove cannot exceed the available balance.");
-    }
-    const idempotencyKey = input.idempotencyKey ?? (0, import_node_crypto5.randomUUID)();
-    const requestResult = await client.query(
-      `INSERT INTO reward_adjustment_requests (
-        phone_e164, direction, points, reason, current_points_at_request, requested_by, idempotency_key
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING request_id, requested_at`,
-      [input.phoneE164, input.direction, input.points, input.reason, previousBalance, input.adminUsername, idempotencyKey]
-    );
-    await writeAdminAudit(client, {
-      ...input.audit,
-      action: "REWARD_ADJUSTMENT_REQUESTED",
-      entityType: "REWARD_ADJUSTMENT_REQUEST",
-      entityId: requestResult.rows[0].request_id,
-      beforeData: { availablePoints: previousBalance },
-      afterData: { direction: input.direction, points: input.points, status: "PENDING" },
-      reason: input.reason
-    });
-    return {
-      requestId: requestResult.rows[0].request_id,
-      status: "PENDING",
-      direction: input.direction,
-      points: input.points,
-      availablePoints: previousBalance,
-      requestedAt: requestResult.rows[0].requested_at
-    };
-  };
-  return transactionClient ? operation(transactionClient) : withTransaction(operation);
-}
-async function listRewardAdjustmentRequests(status = "PENDING") {
-  const where = status === "ALL" ? "" : "WHERE request.request_status = $1";
-  const values = status === "ALL" ? [] : [status];
-  const result = await query(
-    `${rewardRequestSelect} ${where} ORDER BY request.requested_at DESC LIMIT 500`,
-    values
-  );
-  return result.rows.map(mapRewardRequest);
-}
-async function reviewRewardAdjustmentRequest(input, transactionClient) {
-  const operation = async (client) => {
-    const requestResult = await client.query(
-      `SELECT request_id, phone_e164, direction, points, reason, request_status, requested_by
-       FROM reward_adjustment_requests WHERE request_id = $1 FOR UPDATE`,
-      [input.requestId]
-    );
-    const request = requestResult.rows[0];
-    if (!request) throw new ApiError(404, "REWARD_REQUEST_NOT_FOUND", "Reward adjustment request not found.");
-    if (request.request_status !== "PENDING") {
-      throw new ApiError(409, "REWARD_REQUEST_ALREADY_REVIEWED", "This reward request has already been reviewed.");
-    }
-    let ledgerEntryId = null;
-    let availablePoints;
-    const balanceResult = await client.query(
-      "SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1 FOR UPDATE",
-      [request.phone_e164]
-    );
-    const previousBalance = Number(balanceResult.rows[0]?.available_points ?? 0);
-    availablePoints = previousBalance;
-    if (input.decision === "APPROVE") {
-      if (request.direction === "REMOVE" && request.points > previousBalance) {
-        throw new ApiError(409, "INSUFFICIENT_REWARD_BALANCE", "This customer no longer has enough points for the requested deduction.");
-      }
-      const delta = request.direction === "ADD" ? request.points : -request.points;
-      const entryType = request.direction === "ADD" ? "ADMIN_CREDIT" : "ADMIN_DEBIT";
-      const ledgerResult = await client.query(
-        `INSERT INTO reward_ledger (
-          phone_e164, entry_type, points_delta, reason, source, idempotency_key, created_by
-        ) VALUES ($1, $2, $3, $4, 'ADMIN', $5, $6) RETURNING entry_id`,
-        [request.phone_e164, entryType, delta, request.reason, `reward-request:${request.request_id}`, input.superAdminUsername]
-      );
-      ledgerEntryId = ledgerResult.rows[0].entry_id;
-      availablePoints = previousBalance + delta;
-    }
-    const status = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
-    await client.query(
-      `UPDATE reward_adjustment_requests
-       SET request_status = $2, reviewed_by = $3, reviewed_at = now(), review_note = $4, ledger_entry_id = $5
-       WHERE request_id = $1`,
-      [request.request_id, status, input.superAdminUsername, input.reviewNote ?? null, ledgerEntryId]
-    );
-    await writeAdminAudit(client, {
-      ...input.audit,
-      action: `REWARD_ADJUSTMENT_${status}`,
-      entityType: "REWARD_ADJUSTMENT_REQUEST",
-      entityId: request.request_id,
-      beforeData: { status: "PENDING", availablePoints: previousBalance },
-      afterData: { status, availablePoints, ledgerEntryId },
-      reason: input.reviewNote || request.reason
-    });
-    const result = await client.query(
-      `${rewardRequestSelect} WHERE request.request_id = $1`,
-      [request.request_id]
-    );
-    return mapRewardRequest(result.rows[0]);
-  };
-  return transactionClient ? operation(transactionClient) : withTransaction(operation);
-}
-async function getUnifiedDashboard(phoneE164) {
-  const result = await query(
-    `SELECT phone_e164, total_bookings, available_points, total_points_earned,
-            total_points_redeemed, balance_version, updated_at
-     FROM customer_dashboard_summary WHERE phone_e164 = $1`,
-    [phoneE164]
-  );
-  const row = result.rows[0];
-  if (!row) throw new ApiError(404, "CUSTOMER_NOT_FOUND", "Customer identity not found.");
-  return {
-    phoneE164: row.phone_e164,
-    totalBookings: Number(row.total_bookings),
-    availablePoints: Number(row.available_points),
-    totalPointsEarned: Number(row.total_points_earned),
-    totalPointsRedeemed: Number(row.total_points_redeemed),
-    balanceVersion: Number(row.balance_version),
-    updatedAt: row.updated_at
-  };
-}
-
 // src/services/reward-catalog.service.ts
 var import_node_crypto6 = require("node:crypto");
 var REWARD_BUCKET = "reward-images";
@@ -99732,7 +100045,7 @@ async function listPendingRedemptionRequests() {
   }));
 }
 async function reviewRedemptionRequest(input) {
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const requestResult = await client.query(
       "SELECT request_id, phone_e164, reward_id, points_at_request FROM reward_redemption_requests WHERE request_id = $1 AND request_status = 'PENDING' FOR UPDATE",
       [input.requestId]
@@ -99747,7 +100060,7 @@ async function reviewRedemptionRequest(input) {
         [input.audit.adminUsername, input.reviewNote, input.requestId]
       );
       await writeAdminAudit(client, { ...input.audit, action: "REDEMPTION_REJECTED", entityType: "REWARD_REDEMPTION", entityId: input.requestId });
-      return { success: true, message: "Request rejected." };
+      return { success: true, message: "Request rejected.", phoneE164: null, availablePoints: null };
     }
     const balanceResult = await client.query("SELECT available_points FROM customer_reward_balances WHERE phone_e164 = $1 FOR UPDATE", [request.phone_e164]);
     if (!balanceResult.rows[0] || balanceResult.rows[0].available_points < request.points_at_request) {
@@ -99763,8 +100076,17 @@ async function reviewRedemptionRequest(input) {
     });
     await client.query(`UPDATE reward_redemption_requests SET request_status = 'APPROVED', reviewed_by_admin = $1, reviewed_at = now(), review_note = $2, ledger_entry_id = $3 WHERE request_id = $4`, [input.audit.adminUsername, input.reviewNote, ledgerEntryId, input.requestId]);
     await writeAdminAudit(client, { ...input.audit, action: "REDEMPTION_APPROVED", entityType: "REWARD_REDEMPTION", entityId: input.requestId });
-    return { success: true, message: "Request approved." };
+    const availablePoints = Number(balanceResult.rows[0].available_points) - request.points_at_request;
+    return { success: true, message: "Request approved.", phoneE164: request.phone_e164, availablePoints };
   });
+  if (result.phoneE164 && result.availablePoints !== null) {
+    try {
+      await syncRewardThresholdNotifications(result.phoneE164, result.availablePoints);
+    } catch (error51) {
+      console.error("Reward threshold notification failed after redemption approval:", error51);
+    }
+  }
+  return { success: result.success, message: result.message };
 }
 async function listCustomerRedemptions(phoneE164) {
   const result = await query(`
@@ -99798,123 +100120,6 @@ async function listCustomerRedemptions(phoneE164) {
     requestedAt: row.requested_at,
     reviewedAt: row.reviewed_at
   }));
-}
-
-// src/services/whatsapp.service.ts
-async function sendWhatsAppOtpMessage(options) {
-  if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_CLOUD_API_TOKEN) {
-    throw new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp Cloud API credentials are not configured.");
-  }
-  const recipient = options.phoneE164.replace(/[^0-9]/g, "");
-  const url2 = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-  const payload = {
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
-    to: recipient,
-    type: "template",
-    template: {
-      name: env.WHATSAPP_TEMPLATE_NAME_OTP,
-      language: {
-        code: env.WHATSAPP_TEMPLATE_LANGUAGE
-      },
-      components: [
-        {
-          type: "body",
-          parameters: [
-            {
-              type: "text",
-              text: options.otp
-            }
-          ]
-        }
-      ]
-    }
-  };
-  const response = await fetch(url2, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${env.WHATSAPP_CLOUD_API_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-  const result = await response.json();
-  if (!response.ok || result.error) {
-    const errorMsg = result.error?.message || `Meta WhatsApp API failed with status ${response.status}`;
-    console.error("WhatsApp OTP API error:", result.error || result);
-    throw new ApiError(502, "WHATSAPP_SEND_FAILED", errorMsg, result.error);
-  }
-  const messageId = result.messages?.[0]?.id || "unknown";
-  return { messageId };
-}
-async function sendWhatsAppBookingRewardMessage(options) {
-  if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_CLOUD_API_TOKEN) {
-    throw new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp Cloud API credentials are not configured.");
-  }
-  const recipient = options.phoneE164.replace(/[^0-9]/g, "");
-  const url2 = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-  const normalizedType = String(options.bookingType || "").toUpperCase();
-  const imageFileName = normalizedType.includes("FLIGHT") ? "flight.png" : normalizedType.includes("HOTEL") ? "hotel.png" : "holiday-v2.png";
-  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || "https://reward.gacholidays.com").replace(/\/$/, "");
-  const headerImageUrl = options.imageUrl || `${publicBaseUrl}/images/${imageFileName}`;
-  const payload = {
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
-    to: recipient,
-    type: "template",
-    template: {
-      name: env.WHATSAPP_TEMPLATE_NAME_REWARDS || "gac_booking_rewards",
-      language: {
-        code: env.WHATSAPP_TEMPLATE_LANGUAGE || "en"
-      },
-      components: [
-        {
-          type: "header",
-          parameters: [
-            {
-              type: "image",
-              image: {
-                link: headerImageUrl
-              }
-            }
-          ]
-        },
-        {
-          type: "body",
-          parameters: [
-            {
-              type: "text",
-              text: String(options.customerName)
-            },
-            {
-              type: "text",
-              text: String(options.pointsEarned)
-            },
-            {
-              type: "text",
-              text: String(options.totalBalance)
-            }
-          ]
-        }
-      ]
-    }
-  };
-  const response = await fetch(url2, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${env.WHATSAPP_CLOUD_API_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-  const result = await response.json();
-  if (!response.ok || result.error) {
-    const errorMsg = result.error?.message || `Meta WhatsApp API failed with status ${response.status}`;
-    console.error("WhatsApp Reward API error:", result.error || result);
-    throw new ApiError(502, "WHATSAPP_SEND_FAILED", errorMsg, result.error);
-  }
-  const messageId = result.messages?.[0]?.id || "unknown";
-  return { messageId };
 }
 
 // src/routes/admin.routes.ts
@@ -100040,6 +100245,18 @@ adminRouter.get("/customers", async (request, response) => {
   }).parse(request.query);
   response.status(200).json({ data: await listAdminCustomers(filters.search, filters.limit, filters.offset) });
 });
+adminRouter.get("/new-customers", async (request, response) => {
+  const filters = external_exports.object({
+    search: external_exports.string().max(150).default(""),
+    limit: external_exports.coerce.number().int().min(1).max(1e4).default(250),
+    startDate: external_exports.string().date().optional(),
+    endDate: external_exports.string().date().optional()
+  }).parse(request.query);
+  if (filters.startDate && filters.endDate && filters.endDate < filters.startDate) {
+    throw new ApiError(400, "INVALID_DATE_RANGE", "End date cannot be earlier than start date.");
+  }
+  response.status(200).json({ data: await listNewPortalCustomers(filters.search, filters.limit, filters.startDate, filters.endDate) });
+});
 adminRouter.post("/customers", requireCsrf, async (request, response) => {
   const input = customerSchema.parse(request.body);
   const audit = auditContext(request);
@@ -100076,6 +100293,19 @@ adminRouter.post("/customers/:phone/bookings", requireCsrf, async (request, resp
     adminUsername,
     idempotencyKey: request.header("idempotency-key")?.trim() || (0, import_node_crypto8.randomUUID)(),
     audit: auditContext(request)
+  });
+  getAdminCustomer(phoneE164).then((customer) => {
+    if (customer && customer.name) {
+      return sendWhatsAppBookingRewardMessage({
+        phoneE164,
+        customerName: customer.name,
+        pointsEarned: data.rewardPoints,
+        totalBalance: customer.availablePoints,
+        bookingType: data.type
+      });
+    }
+  }).catch((err) => {
+    console.error("Failed to send WhatsApp notification on booking addition:", err);
   });
   response.status(201).json({ data });
 });
@@ -100262,15 +100492,19 @@ portalRouter.post("/auth/send-otp", async (request, response, next) => {
     if (attempts > 5) throw new ApiError(429, "RATE_LIMITED", "Too many OTP requests. Please wait a minute before requesting another code.");
     const otp = Math.floor(1e5 + Math.random() * 9e5).toString();
     await redis.set(`otp:${phoneE164}`, otp, { ex: 300 });
+    const otpFailureMessage = "We could not send the OTP to your WhatsApp number. Please try again in a minute.";
     if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_CLOUD_API_TOKEN) {
       try {
         await sendWhatsAppOtpMessage({ phoneE164, otp });
+        response.status(200).json({ data: { message: "OTP sent successfully to your WhatsApp number." } });
+        return;
       } catch (err) {
         console.error("Failed to dispatch WhatsApp OTP:", err);
+        response.status(200).json({ data: { message: otpFailureMessage } });
+        return;
       }
-    } else {
-      console.log(`[OTP DEBUG] OTP for ${phoneE164} is: ${otp}`);
     }
+    console.log(`[OTP DEBUG] OTP for ${phoneE164} is: ${otp}`);
     response.status(200).json({ data: { message: "OTP sent successfully to your WhatsApp number." } });
   } catch (error51) {
     next(error51);
