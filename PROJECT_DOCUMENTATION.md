@@ -225,6 +225,7 @@ Only an Admin operational customer can receive a booking through the current API
 3. Points are calculated as `floor(purchased amount / rupees per point)`.
 4. A `CONFIRMED` booking is inserted with source `ADMIN`.
 5. A booking event, a `BOOKING_EARN` ledger entry (if points > 0), an admin audit record, and a domain event are written in the same transaction.
+6. A WhatsApp booking-reward notification is asynchronously sent to the customer detailing their earned points and updated balance.
 
 Initial schema rules are:
 
@@ -268,7 +269,7 @@ The backend calls Meta’s Graph API (`/{graph version}/{phone number ID}/messag
 | Message | Trigger | Template/environment setting |
 | --- | --- | --- |
 | OTP | Customer asks to send OTP | `WHATSAPP_TEMPLATE_NAME_OTP` |
-| Booking-reward notification | Admin clicks **Send Rewards** | `WHATSAPP_TEMPLATE_NAME_REWARDS` |
+| Booking-reward notification | Admin creates a booking or clicks **Send Rewards** | `WHATSAPP_TEMPLATE_NAME_REWARDS` |
 
 The booking-reward template receives an image header selected by booking type plus customer name, newly earned points, and total points balance. The image normally resolves from `PUBLIC_BASE_URL` (default `https://reward.gacholidays.com`) under `/images/`.
 
