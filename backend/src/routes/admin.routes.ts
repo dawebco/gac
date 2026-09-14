@@ -216,6 +216,24 @@ adminRouter.post('/customers/:phone/bookings', requireCsrf, async (request, resp
     idempotencyKey: request.header('idempotency-key')?.trim() || randomUUID(),
     audit: auditContext(request),
   });
+
+  // Trigger WhatsApp notification asynchronously
+  getAdminCustomer(phoneE164)
+    .then((customer) => {
+      if (customer && customer.name) {
+        return sendWhatsAppBookingRewardMessage({
+          phoneE164,
+          customerName: customer.name,
+          pointsEarned: data.rewardPoints,
+          totalBalance: customer.availablePoints,
+          bookingType: data.type,
+        });
+      }
+    })
+    .catch((err) => {
+      console.error('Failed to send WhatsApp notification on booking addition:', err);
+    });
+
   response.status(201).json({ data });
 });
 
