@@ -90802,7 +90802,8 @@ async function sendWhatsAppOtpMessage(options) {
   const result = await response.json();
   if (!response.ok || result.error) {
     const errorMsg = result.error?.message || `Meta WhatsApp API failed with status ${response.status}`;
-    console.error("WhatsApp OTP API error:", result.error || result);
+    console.error("[WhatsApp OTP API Error Response]:", JSON.stringify(result.error || result, null, 2));
+    console.error("[WhatsApp OTP Payload Sent]:", JSON.stringify(payload, null, 2));
     throw new ApiError(502, "WHATSAPP_SEND_FAILED", errorMsg, result.error);
   }
   const messageId = result.messages?.[0]?.id || "unknown";
