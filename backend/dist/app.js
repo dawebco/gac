@@ -99641,6 +99641,8 @@ async function reviewCustomerDeletionRequest(input) {
       );
       console.log("[Delete Cascade] Purging customer reward balances...");
       await client.query(`DELETE FROM customer_reward_balances WHERE phone_e164 = $1`, [phoneE164]);
+      console.log("[Delete Cascade] Purging reward threshold notifications...");
+      await client.query(`DELETE FROM reward_threshold_notifications WHERE phone_e164 = $1`, [phoneE164]);
       console.log("[Delete Cascade] Purging reward accounts...");
       await client.query(`DELETE FROM reward_accounts WHERE phone_e164 = $1`, [phoneE164]);
       console.log("[Delete Cascade] Purging booking events...");

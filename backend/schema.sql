@@ -328,7 +328,7 @@ CREATE TABLE IF NOT EXISTS customer_reward_balances (
 CREATE TABLE IF NOT EXISTS reward_threshold_notifications (
   phone_e164 phone_e164 NOT NULL
     REFERENCES reward_accounts(phone_e164)
-    ON UPDATE CASCADE ON DELETE RESTRICT,
+    ON UPDATE CASCADE ON DELETE CASCADE,
   reward_id uuid NOT NULL
     REFERENCES reward_catalog(reward_id)
     ON UPDATE CASCADE ON DELETE RESTRICT,
