@@ -117,6 +117,13 @@ export const adminApi = {
     if (endDate) params.set('endDate', endDate);
     return apiRequest(`/admin/new-customers?${params.toString()}`);
   },
+  bookingReport: ({ type, startDate, endDate } = {}) => {
+    const params = new URLSearchParams();
+    if (type && type !== 'All bookings') params.set('type', bookingTypes[type] || type);
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    return apiRequest(`/admin/reports/bookings?${params.toString()}`);
+  },
   async customer(phone) {
     return mapAdminCustomer(await apiRequest(`/admin/customers/${encodeURIComponent(phone)}`));
   },

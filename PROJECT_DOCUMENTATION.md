@@ -190,7 +190,7 @@ Admin credentials are configured with `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH`
 - View/review customer reward-redemption requests.
 - Create, edit, and delete reward catalog entries as requests for Super Admin approval; reward image uploads go to Supabase Storage.
 - Send a booking-reward WhatsApp message manually.
-- Generate/download booking reports.
+- **Generate/download booking reports:** filter by booking type, start date, and end date with matching summary KPIs (Customers, Bookings, Points Earned) and export date-filtered tables as Excel `.xls` files.
 - Request a customer deletion using the exact confirmation text `confirm_delete`; Super Admin must approve it.
 - **New Customers:** find self-registered records that have no `admin_customer_records` row and no booking row; search by name/email/phone, filter by self-registration Start Date/End Date, and download the qualifying date-filtered list as an Excel-compatible `.xls` file.
 
@@ -284,7 +284,7 @@ All paths below are under `/api/v1`.
 | Health | `GET /health/live`, `GET /health/ready` |
 | Customer portal | `GET /portal/rewards`, `POST /portal/customers/register`, `POST /portal/auth/send-otp`, `POST /portal/auth/verify-otp`, `POST /portal/rewards/redeem`, `GET /portal/session/dashboard`, `POST /portal/session/logout` |
 | Admin authentication | `POST /admin/auth/login`, `GET /admin/auth/session`, `POST /admin/auth/logout` |
-| Admin operations | `/admin/overview`, `/admin/customers`, `/admin/customers/:phone`, booking and adjustment subroutes, `/admin/new-customers`, `/admin/rewards`, `/admin/redemption-requests`, `/admin/send-whatsapp-reward`, deletion-request routes |
+| Admin operations | `/admin/overview`, `/admin/customers`, `/admin/customers/:phone`, booking and adjustment subroutes, `/admin/new-customers`, `/admin/reports/bookings`, `/admin/rewards`, `/admin/redemption-requests`, `/admin/send-whatsapp-reward`, deletion-request routes |
 | Super Admin authentication | `POST /superadmin/auth/login`, `GET /superadmin/auth/session`, `POST /superadmin/auth/logout` |
 | Super Admin approvals | `/superadmin/reward-requests`, `/superadmin/reward-change-requests`, `/superadmin/customer-deletion-requests` and their `/:requestId/review` routes |
 

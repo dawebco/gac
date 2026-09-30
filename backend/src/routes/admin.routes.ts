@@ -5,7 +5,7 @@ import multer from 'multer';
 import { requireAdmin, requireCsrf } from '../middleware/admin-auth';
 import { sha256 } from '../shared/crypto';
 import { normalizeIndianPhone } from '../shared/phone';
-import { createBooking, listBookings, voidBooking } from '../services/booking.service';
+import { createBooking, getBookingReport, listBookings, voidBooking } from '../services/booking.service';
 import {
   createAdminCustomer,
   getAdminCustomer,
@@ -174,6 +174,27 @@ adminRouter.get('/new-customers', async (request, response) => {
     throw new ApiError(400, 'INVALID_DATE_RANGE', 'End date cannot be earlier than start date.');
   }
   response.status(200).json({ data: await listNewPortalCustomers(filters.search, filters.limit, filters.startDate, filters.endDate) });
+});
+
+adminRouter.get('/reports/bookings', async (request, response, next) => {
+  try {
+    const filters = z.object({
+      type: z.string().optional(),
+      startDate: z.string().date().optional(),
+      endDate: z.string().date().optional(),
+    }).parse(request.query);
+    if (filters.startDate && filters.endDate && filters.endDate < filters.startDate) {
+      throw new ApiError(400, 'INVALID_DATE_RANGE', 'End date cannot be earlier than start date.');
+    }
+    const data = await getBookingReport({
+      bookingType: filters.type,
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+    });
+    response.status(200).json({ data });
+  } catch (error) {
+    next(error);
+  }
 });
 
 adminRouter.post('/customers', requireCsrf, async (request, response) => {

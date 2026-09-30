@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 import { query, withTransaction } from '../database/postgres';
 import { ApiError } from '../shared/api-error';
+import { nationalPhone } from '../shared/phone';
 import { writeAdminAudit } from './audit.service';
 import type { AuditContext } from './customer.service';
 import { syncRewardThresholdNotifications } from './reward.service';
@@ -214,3 +215,94 @@ function mapBooking(row: {
     date: new Date(row.booking_date).toISOString().slice(0, 10),
   };
 }
+
+export interface BookingReportFilter {
+  bookingType?: 'FLIGHTS' | 'HOTELS' | 'HOLIDAYS' | 'ALL' | string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface BookingReportRow {
+  phoneE164: string;
+  phone: string;
+  name: string;
+  email: string;
+  bookings: number;
+  points: number;
+  totalPurchasedAmount: number;
+}
+
+export interface BookingReportResult {
+  summary: {
+    totalCustomers: number;
+    totalBookings: number;
+    totalPoints: number;
+    totalPurchasedAmount: number;
+    bookingType: string;
+    startDate?: string;
+    endDate?: string;
+  };
+  rows: BookingReportRow[];
+}
+
+export async function getBookingReport(filters: BookingReportFilter): Promise<BookingReportResult> {
+  const normalizedType = filters.bookingType && filters.bookingType !== 'ALL' && filters.bookingType !== 'All bookings'
+    ? filters.bookingType.toUpperCase()
+    : '';
+
+  const result = await query<{
+    phone_e164: string;
+    display_name: string;
+    email: string | null;
+    bookings_count: number;
+    points_earned: number;
+    total_amount: string;
+  }>(
+    `SELECT 
+       coalesce(record.phone_e164, b.phone_e164) AS phone_e164,
+       coalesce(record.display_name, profile.full_name, 'Unknown') AS display_name,
+       coalesce(record.email, profile.email, '') AS email,
+       count(b.booking_id)::integer AS bookings_count,
+       coalesce(sum(b.points_awarded), 0)::integer AS points_earned,
+       coalesce(sum(b.purchased_amount), 0)::numeric AS total_amount
+     FROM bookings b
+     LEFT JOIN admin_customer_records record ON record.phone_e164 = b.phone_e164
+     LEFT JOIN portal_customer_profiles profile ON profile.phone_e164 = b.phone_e164
+     WHERE b.booking_status <> 'VOIDED'
+       AND ($1 = '' OR b.booking_type = $1)
+       AND ($2::date IS NULL OR b.booking_date >= $2::date)
+       AND ($3::date IS NULL OR b.booking_date < ($3::date + INTERVAL '1 day'))
+     GROUP BY coalesce(record.phone_e164, b.phone_e164), record.display_name, profile.full_name, record.email, profile.email
+     ORDER BY bookings_count DESC, points_earned DESC, display_name ASC`,
+    [normalizedType, filters.startDate || null, filters.endDate || null],
+  );
+
+  const rows: BookingReportRow[] = result.rows.map(row => ({
+    phoneE164: row.phone_e164,
+    phone: nationalPhone(row.phone_e164),
+    name: row.display_name,
+    email: row.email ?? '',
+    bookings: Number(row.bookings_count),
+    points: Number(row.points_earned),
+    totalPurchasedAmount: Number(row.total_amount),
+  }));
+
+  const totalCustomers = rows.length;
+  const totalBookings = rows.reduce((sum, r) => sum + r.bookings, 0);
+  const totalPoints = rows.reduce((sum, r) => sum + r.points, 0);
+  const totalPurchasedAmount = rows.reduce((sum, r) => sum + r.totalPurchasedAmount, 0);
+
+  return {
+    summary: {
+      totalCustomers,
+      totalBookings,
+      totalPoints,
+      totalPurchasedAmount,
+      bookingType: filters.bookingType || 'All bookings',
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+    },
+    rows,
+  };
+}
+

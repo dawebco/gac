@@ -91316,6 +91316,53 @@ function mapBooking(row) {
     date: new Date(row.booking_date).toISOString().slice(0, 10)
   };
 }
+async function getBookingReport(filters) {
+  const normalizedType = filters.bookingType && filters.bookingType !== "ALL" && filters.bookingType !== "All bookings" ? filters.bookingType.toUpperCase() : "";
+  const result = await query(
+    `SELECT 
+       coalesce(record.phone_e164, b.phone_e164) AS phone_e164,
+       coalesce(record.display_name, profile.full_name, 'Unknown') AS display_name,
+       coalesce(record.email, profile.email, '') AS email,
+       count(b.booking_id)::integer AS bookings_count,
+       coalesce(sum(b.points_awarded), 0)::integer AS points_earned,
+       coalesce(sum(b.purchased_amount), 0)::numeric AS total_amount
+     FROM bookings b
+     LEFT JOIN admin_customer_records record ON record.phone_e164 = b.phone_e164
+     LEFT JOIN portal_customer_profiles profile ON profile.phone_e164 = b.phone_e164
+     WHERE b.booking_status <> 'VOIDED'
+       AND ($1 = '' OR b.booking_type = $1)
+       AND ($2::date IS NULL OR b.booking_date >= $2::date)
+       AND ($3::date IS NULL OR b.booking_date < ($3::date + INTERVAL '1 day'))
+     GROUP BY coalesce(record.phone_e164, b.phone_e164), record.display_name, profile.full_name, record.email, profile.email
+     ORDER BY bookings_count DESC, points_earned DESC, display_name ASC`,
+    [normalizedType, filters.startDate || null, filters.endDate || null]
+  );
+  const rows = result.rows.map((row) => ({
+    phoneE164: row.phone_e164,
+    phone: nationalPhone(row.phone_e164),
+    name: row.display_name,
+    email: row.email ?? "",
+    bookings: Number(row.bookings_count),
+    points: Number(row.points_earned),
+    totalPurchasedAmount: Number(row.total_amount)
+  }));
+  const totalCustomers = rows.length;
+  const totalBookings = rows.reduce((sum, r) => sum + r.bookings, 0);
+  const totalPoints = rows.reduce((sum, r) => sum + r.points, 0);
+  const totalPurchasedAmount = rows.reduce((sum, r) => sum + r.totalPurchasedAmount, 0);
+  return {
+    summary: {
+      totalCustomers,
+      totalBookings,
+      totalPoints,
+      totalPurchasedAmount,
+      bookingType: filters.bookingType || "All bookings",
+      startDate: filters.startDate,
+      endDate: filters.endDate
+    },
+    rows
+  };
+}
 
 // node_modules/@supabase/supabase-js/dist/index.mjs
 var dist_exports = {};
@@ -100256,6 +100303,26 @@ adminRouter.get("/new-customers", async (request, response) => {
     throw new ApiError(400, "INVALID_DATE_RANGE", "End date cannot be earlier than start date.");
   }
   response.status(200).json({ data: await listNewPortalCustomers(filters.search, filters.limit, filters.startDate, filters.endDate) });
+});
+adminRouter.get("/reports/bookings", async (request, response, next) => {
+  try {
+    const filters = external_exports.object({
+      type: external_exports.string().optional(),
+      startDate: external_exports.string().date().optional(),
+      endDate: external_exports.string().date().optional()
+    }).parse(request.query);
+    if (filters.startDate && filters.endDate && filters.endDate < filters.startDate) {
+      throw new ApiError(400, "INVALID_DATE_RANGE", "End date cannot be earlier than start date.");
+    }
+    const data = await getBookingReport({
+      bookingType: filters.type,
+      startDate: filters.startDate,
+      endDate: filters.endDate
+    });
+    response.status(200).json({ data });
+  } catch (error51) {
+    next(error51);
+  }
 });
 adminRouter.post("/customers", requireCsrf, async (request, response) => {
   const input = customerSchema.parse(request.body);

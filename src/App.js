@@ -535,7 +535,7 @@ function AdminDashboard({ onLogout }) {
           onRefresh={refreshData}
         />
       )} 
-      {section === 'reports' && <AdminReportPanel customers={customers}/>}
+      {section === 'reports' && <AdminReportPanel/>}
       {section === 'new_customers' && <AdminNewCustomersPanel/>}
       {section === 'delete_customer' && <AdminDeleteCustomerPanel customers={customers} onRefresh={refreshData}/>}
       <aside className="admin-info"><b>i</b><span>Reward points are calculated automatically based on the company's criteria and updated in the system.</span></aside>
@@ -1143,9 +1143,11 @@ function AdminNewCustomersPanel() {
   </section>;
 }
 
-function AdminReportPanel({ customers }) {
+function AdminReportPanel() {
   const [form, setForm] = useState({ type: 'All bookings', start: '', end: '' });
   const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const update = event => setForm(current => ({ ...current, [event.target.name]: event.target.value }));
 
@@ -1175,47 +1177,46 @@ function AdminReportPanel({ customers }) {
     return `${dd}/${mm}/${yyyy}`;
   };
 
-  const generate = event => {
-    event.preventDefault();
-    const typeFilter = form.type === 'All bookings' ? null : form.type.toUpperCase();
-
-    const filteredRows = customers.map(customer => {
-      const items = (customer.bookingItems || []).filter(b => {
-        if (b.status === 'VOIDED') return false;
-        if (typeFilter && b.type?.toUpperCase() !== typeFilter) return false;
-        if (form.start && b.date && b.date < form.start) return false;
-        if (form.end && b.date && b.date > form.end) return false;
-        return true;
+  const generate = async event => {
+    if (event) event.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const data = await adminApi.bookingReport({
+        type: form.type,
+        startDate: form.start,
+        endDate: form.end,
       });
-      return {
-        ...customer,
-        filteredBookingsCount: items.length,
-      };
-    }).filter(c => c.filteredBookingsCount > 0 || (!form.start && !form.end && form.type === 'All bookings'));
 
-    const totalBookingsCount = filteredRows.reduce((sum, c) => sum + (c.filteredBookingsCount || c.bookings || 0), 0);
-
-    setReport({
-      customers: filteredRows.length,
-      bookings: totalBookingsCount,
-      type: form.type,
-      range: form.start && form.end
-        ? `${formatDateDisplay(form.start)} to ${formatDateDisplay(form.end)}`
-        : form.start
-          ? `From ${formatDateDisplay(form.start)}`
-          : form.end
-            ? `Until ${formatDateDisplay(form.end)}`
-            : 'All dates',
-      generatedAt: new Date().toLocaleString('en-IN'),
-      rows: filteredRows.length > 0 ? filteredRows : customers,
-    });
+      setReport({
+        customers: data.summary.totalCustomers,
+        bookings: data.summary.totalBookings,
+        points: data.summary.totalPoints,
+        type: form.type,
+        range: form.start && form.end
+          ? `${formatDateDisplay(form.start)} to ${formatDateDisplay(form.end)}`
+          : form.start
+            ? `From ${formatDateDisplay(form.start)}`
+            : form.end
+              ? `Until ${formatDateDisplay(form.end)}`
+              : 'All dates',
+        generatedAt: new Date().toLocaleString('en-IN'),
+        rows: data.rows || [],
+      });
+    } catch (err) {
+      setError(err.message || 'Unable to generate booking report.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const downloadExcel = () => {
     if (!report) return;
-    const escapeCell = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const customerRows = report.rows.map(customer => `<tr><td>${escapeCell(customer.name)}</td><td>${escapeCell(customer.email)}</td><td>${escapeCell(customer.phone)}</td><td>${customer.bookings}</td><td>${escapeCell(customer.points)}</td></tr>`).join('');
-    const workbook = `<!doctype html><html><head><meta charset="UTF-8"><style>body{font-family:Arial,sans-serif}h1{color:#001735}table{border-collapse:collapse;width:100%}th{background:#001735;color:#fff}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}.meta td:first-child{font-weight:bold;background:#f8fafc}</style></head><body><h1>GAC Holidays Customer Report</h1><table class="meta"><tr><td>Booking type</td><td>${escapeCell(report.type)}</td></tr><tr><td>Date range</td><td>${escapeCell(report.range)}</td></tr><tr><td>Generated</td><td>${escapeCell(report.generatedAt)}</td></tr><tr><td>Total customers</td><td>${report.customers}</td></tr><tr><td>Total bookings</td><td>${report.bookings}</td></tr></table><br><table><thead><tr><th>Customer Name</th><th>Email Address</th><th>Phone Number</th><th>Bookings</th><th>Points Balance</th></tr></thead><tbody>${customerRows}</tbody></table></body></html>`;
+    const escapeCell = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const customerRows = report.rows.length > 0
+      ? report.rows.map(customer => `<tr><td>${escapeCell(customer.name)}</td><td>${escapeCell(customer.email)}</td><td>${escapeCell(customer.phone)}</td><td>${customer.bookings}</td><td>${escapeCell(customer.points.toLocaleString('en-IN'))}</td></tr>`).join('')
+      : '<tr><td colspan="5" style="text-align:center;padding:12px;color:#64748b;">No bookings found for the selected date range.</td></tr>';
+    const workbook = `<!doctype html><html><head><meta charset="UTF-8"><style>body{font-family:Arial,sans-serif}h1{color:#001735}table{border-collapse:collapse;width:100%}th{background:#001735;color:#fff}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}.meta td:first-child{font-weight:bold;background:#f8fafc}</style></head><body><h1>GAC Holidays Customer Report</h1><table class="meta"><tr><td>Booking type</td><td>${escapeCell(report.type)}</td></tr><tr><td>Date range</td><td>${escapeCell(report.range)}</td></tr><tr><td>Generated</td><td>${escapeCell(report.generatedAt)}</td></tr><tr><td>Total customers</td><td>${report.customers}</td></tr><tr><td>Total bookings</td><td>${report.bookings}</td></tr><tr><td>Total points earned</td><td>${escapeCell((report.points || 0).toLocaleString('en-IN'))}</td></tr></table><br><table><thead><tr><th>Customer Name</th><th>Email Address</th><th>Phone Number</th><th>Bookings</th><th>Points Earned</th></tr></thead><tbody>${customerRows}</tbody></table></body></html>`;
     const blob = new Blob(['\ufeff', workbook], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1265,11 +1266,12 @@ function AdminReportPanel({ customers }) {
           />
         </div>
         <div className="admin-form-actions">
-          <button type="submit" className="admin-primary-action">
-            <Briefcase size={18}/>Generate Report
+          <button type="submit" className="admin-primary-action" disabled={loading}>
+            <Briefcase size={18}/>{loading ? 'Generating Report...' : 'Generate Report'}
           </button>
         </div>
       </form>
+      {error && <p className="admin-form-message" role="alert">{error}</p>}
       {report && (
         <section className="admin-report-preview" aria-label="Report preview">
           <header>
@@ -1299,18 +1301,24 @@ function AdminReportPanel({ customers }) {
               </thead>
               <tbody>
                 {report.rows.map(customer => (
-                  <tr key={customer.phone}>
+                  <tr key={customer.phoneE164 || customer.phone}>
                     <td>
                       <strong>{customer.name}</strong>
                       <small>{customer.email}</small>
                     </td>
                     <td>{customer.phone}</td>
-                    <td>{customer.filteredBookingsCount ?? customer.bookings}</td>
-                    <td>{customer.points}</td>
+                    <td>{customer.bookings}</td>
+                    <td>{customer.points.toLocaleString('en-IN')}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {!report.rows.length && (
+              <div className="admin-empty">
+                <Briefcase size={22}/>
+                <span>No bookings found for the selected date range and criteria.</span>
+              </div>
+            )}
           </div>
         </section>
       )}
